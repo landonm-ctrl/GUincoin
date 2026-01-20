@@ -1,0 +1,300 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  isManager Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  account             Account?
+  managerAllotments   ManagerAllotment[]
+  sentAwards          LedgerTransaction[]  @relation("ManagerAwards")
+  sentTransfers       LedgerTransaction[]  @relation("SentTransfers")
+  receivedTransfers   LedgerTransaction[]  @relation("ReceivedTransfers")
+  wellnessSubmissions WellnessSubmission[]
+  reviewedSubmissions WellnessSubmission[] @relation("ReviewedBy")
+  peerTransferLimits  PeerTransferLimit[]
+  pendingTransfers    PendingTransfer[]
+  purchases           StorePurchaseOrder[]
+  wishlistItems       WishlistItem[]
+  goals               Goal[]
+  fulfilledPurchases  StorePurchaseOrder[] @relation("FulfilledPurchases")
+}
+
+model Account {
+  id         String   @id @default(uuid())
+  employeeId String   @unique
+  balance    Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee     Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  transactions LedgerTransaction[]
+}
+
+model LedgerTransaction {
+  id                   String            @id @default(uuid())
+  accountId            String
+  transactionType      TransactionType
+  amount               Decimal           @db.Decimal(10, 2)
+  status               TransactionStatus @default(pending)
+  description          String?           @db.Text
+  sourceEmployeeId     String?
+  targetEmployeeId     String?
+  wellnessSubmissionId String?           @unique
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  postedAt             DateTime?
+
+  account            Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceEmployee     Employee?           @relation("ManagerAwards", fields: [sourceEmployeeId], references: [id], map: "LedgerTransaction_sourceEmployeeId_manager_fkey")
+  transferSender     Employee?           @relation("SentTransfers", fields: [sourceEmployeeId], references: [id], map: "LedgerTransaction_sourceEmployeeId_transfer_fkey")
+  transferReceiver   Employee?           @relation("ReceivedTransfers", fields: [targetEmployeeId], references: [id])
+  wellnessSubmission WellnessSubmission? @relation(fields: [wellnessSubmissionId], references: [id])
+  purchaseOrder      StorePurchaseOrder?
+
+  @@index([accountId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([sourceEmployeeId])
+  @@index([targetEmployeeId])
+}
+
+enum TransactionType {
+  manager_award
+  peer_transfer_sent
+  peer_transfer_received
+  wellness_reward
+  adjustment
+  store_purchase
+}
+
+enum TransactionStatus {
+  pending
+  posted
+  rejected
+}
+
+model ManagerAllotment {
+  id          String     @id @default(uuid())
+  managerId   String
+  periodType  PeriodType
+  amount      Decimal    @db.Decimal(10, 2)
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  manager Employee @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@index([managerId, periodStart, periodEnd])
+}
+
+enum PeriodType {
+  monthly
+  quarterly
+}
+
+enum PendingTransferStatus {
+  pending
+  claimed
+  cancelled
+}
+
+model WellnessTask {
+  id               String        @id @default(uuid())
+  name             String
+  description      String?       @db.Text
+  instructions     String?       @db.Text
+  coinValue        Decimal       @db.Decimal(10, 2)
+  frequencyRule    FrequencyRule
+  requiresApproval Boolean       @default(true)
+  formTemplateUrl  String?
+  maxRewardedUsers Int?
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  submissions WellnessSubmission[]
+
+  @@index([isActive])
+}
+
+enum FrequencyRule {
+  one_time
+  annual
+  quarterly
+}
+
+model WellnessSubmission {
+  id              String           @id @default(uuid())
+  employeeId      String
+  wellnessTaskId  String
+  documentUrl     String
+  status          SubmissionStatus @default(pending)
+  rejectionReason String?          @db.Text
+  reviewedById    String?
+  reviewedAt      DateTime?
+  submittedAt     DateTime         @default(now())
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  employee     Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  wellnessTask WellnessTask       @relation(fields: [wellnessTaskId], references: [id])
+  reviewedBy   Employee?          @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  transaction  LedgerTransaction?
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([wellnessTaskId])
+}
+
+enum SubmissionStatus {
+  pending
+  approved
+  rejected
+}
+
+model PeerTransferLimit {
+  id          String     @id @default(uuid())
+  employeeId  String
+  periodType  PeriodType
+  maxAmount   Decimal    @db.Decimal(10, 2)
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, periodStart, periodEnd])
+}
+
+model PendingTransfer {
+  id                 String                @id @default(uuid())
+  senderEmployeeId   String
+  recipientEmail     String
+  amount             Decimal               @db.Decimal(10, 2)
+  message            String?               @db.Text
+  status             PendingTransferStatus @default(pending)
+  senderTransactionId String               @unique
+  createdAt          DateTime              @default(now())
+  claimedAt          DateTime?
+
+  senderEmployee Employee @relation(fields: [senderEmployeeId], references: [id], onDelete: Cascade)
+
+  @@index([recipientEmail, status])
+}
+
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  subject   String
+  html      String   @db.Text
+  isEnabled Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum StoreProductSource {
+  custom
+  amazon
+  amazon_list
+}
+
+model StoreProduct {
+  id            String             @id @default(uuid())
+  name          String
+  description   String?            @db.Text
+  imageUrls     String[]           @default([])
+  amazonUrl     String?
+  amazonAsin    String?            @unique
+  source        StoreProductSource
+  priceUsd      Decimal?           @db.Decimal(10, 2)
+  priceGuincoin Decimal            @db.Decimal(10, 2)
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  purchases    StorePurchaseOrder[]
+  wishlistItems WishlistItem[]
+  goals        Goal[]
+
+  @@index([isActive])
+  @@index([source])
+}
+
+enum PurchaseOrderStatus {
+  pending
+  fulfilled
+  cancelled
+}
+
+model StorePurchaseOrder {
+  id                  String              @id @default(uuid())
+  employeeId          String
+  productId           String
+  transactionId       String              @unique
+  status              PurchaseOrderStatus @default(pending)
+  fulfilledById       String?
+  fulfilledAt         DateTime?
+  shippingAddress     String?             @db.Text
+  trackingNumber      String?
+  notes               String?             @db.Text
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  employee    Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product     StoreProduct @relation(fields: [productId], references: [id])
+  transaction LedgerTransaction @relation(fields: [transactionId], references: [id])
+  fulfilledBy Employee?   @relation("FulfilledPurchases", fields: [fulfilledById], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([productId])
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  employeeId String
+  productId  String
+  createdAt DateTime @default(now())
+
+  employee Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product  StoreProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, productId])
+  @@index([employeeId])
+}
+
+model Goal {
+  id            String   @id @default(uuid())
+  employeeId    String
+  productId     String
+  targetAmount  Decimal  @db.Decimal(10, 2)
+  currentAmount Decimal  @default(0) @db.Decimal(10, 2)
+  isAchieved    Boolean  @default(false)
+  achievedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  employee Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product  StoreProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([isAchieved])
+}
