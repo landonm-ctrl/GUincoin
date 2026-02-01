@@ -1,37 +1,22 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useStudio } from '../context/StudioContext';
+import { useStudio, CanvasLayer } from '../context/StudioContext';
+import TextInputDialog, { TextDialogResult } from './TextInputDialog';
 
-// History management hook for undo/redo
-function useHistory<T>(initialState: T) {
-  const [history, setHistory] = useState<T[]>([initialState]);
-  const [historyIndex, setHistoryIndex] = useState(0);
+// Constants for resize handles
+const HANDLE_SIZE = 10;
+type HandlePosition = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
-  const current = history[historyIndex];
-
-  const push = useCallback((newState: T) => {
-    setHistory(prev => {
-      // Remove any future states if we're not at the end
-      const newHistory = prev.slice(0, historyIndex + 1);
-      // Add new state, limit history to 50 entries
-      const limited = [...newHistory, newState].slice(-50);
-      setHistoryIndex(limited.length - 1);
-      return limited;
-    });
-  }, [historyIndex]);
-
-  const undo = useCallback(() => {
-    setHistoryIndex(prev => Math.max(0, prev - 1));
-  }, []);
-
-  const redo = useCallback(() => {
-    setHistoryIndex(prev => Math.min(history.length - 1, prev + 1));
-  }, [history.length]);
-
-  const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < history.length - 1;
-
-  return { current, push, undo, redo, canUndo, canRedo };
-}
+// Cursor mapping for resize handles
+const HANDLE_CURSORS: Record<HandlePosition, string> = {
+  nw: 'nwse-resize',
+  n: 'ns-resize',
+  ne: 'nesw-resize',
+  e: 'ew-resize',
+  se: 'nwse-resize',
+  s: 'ns-resize',
+  sw: 'nesw-resize',
+  w: 'ew-resize',
+};
 
 // Banner dimension presets
 const BANNER_PRESETS = {
@@ -45,38 +30,192 @@ const BANNER_PRESETS = {
 
 type BannerPreset = keyof typeof BANNER_PRESETS;
 
-interface CanvasLayer {
-  id: string;
-  type: 'image' | 'text' | 'shape';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  content: string; // URL for images, text content for text
-  zIndex: number;
-}
-
 export default function BannerCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { canvasState, selectedCampaign, getCurrentTheme, setSelectedObjects } = useStudio();
+  const { canvasState, selectedCampaign, getCurrentTheme, setSelectedObjects, setCanvasTool, layers, setLayers } = useStudio();
 
   const [selectedPreset, setSelectedPreset] = useState<BannerPreset>('header');
   const [canvasDimensions, setCanvasDimensions] = useState(BANNER_PRESETS.header);
   const [isDragOver, setIsDragOver] = useState(false);
   const [loadedImages, setLoadedImages] = useState<Map<string, HTMLImageElement>>(new Map());
 
-  // Use history hook for undo/redo support
-  const {
-    current: layers,
-    push: pushLayers,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-  } = useHistory<CanvasLayer[]>([]);
+  // Drag and resize state
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [activeHandle, setActiveHandle] = useState<HandlePosition | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; layerX: number; layerY: number } | null>(null);
+  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; layerX: number; layerY: number; layerWidth: number; layerHeight: number } | null>(null);
+  const [cursorStyle, setCursorStyle] = useState<string>('default');
+
+  // Text input dialog state
+  const [showTextDialog, setShowTextDialog] = useState(false);
+  const [textDialogPosition, setTextDialogPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Shape drawing state
+  const [isDrawingShape, setIsDrawingShape] = useState(false);
+  const [shapeDrawStart, setShapeDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [shapeDrawCurrent, setShapeDrawCurrent] = useState<{ x: number; y: number } | null>(null);
+
+  // History state for undo/redo - using local history but syncing with context layers
+  const [layerHistory, setLayerHistory] = useState<CanvasLayer[][]>([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < layerHistory.length - 1;
+
+  // Sync context layers with local history
+  useEffect(() => {
+    if (JSON.stringify(layers) !== JSON.stringify(layerHistory[historyIndex])) {
+      // External change - add to history
+      const newHistory = layerHistory.slice(0, historyIndex + 1);
+      newHistory.push(layers);
+      setLayerHistory(newHistory.slice(-50)); // Limit to 50 entries
+      setHistoryIndex(newHistory.length - 1);
+    }
+  }, [layers]);
+
+  const pushLayers = useCallback((newLayers: CanvasLayer[]) => {
+    setLayers(newLayers);
+  }, [setLayers]);
+
+  const undo = useCallback(() => {
+    if (canUndo) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setLayers(layerHistory[newIndex]);
+    }
+  }, [canUndo, historyIndex, layerHistory, setLayers]);
+
+  const redo = useCallback(() => {
+    if (canRedo) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setLayers(layerHistory[newIndex]);
+    }
+  }, [canRedo, historyIndex, layerHistory, setLayers]);
 
   const theme = getCurrentTheme();
+
+  // Get canvas coordinates from mouse event
+  const getCanvasCoordinates = useCallback((e: React.MouseEvent | MouseEvent): { x: number; y: number } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
+    const rect = canvas.getBoundingClientRect();
+    const scale = calculateScale();
+    return {
+      x: (e.clientX - rect.left) / scale,
+      y: (e.clientY - rect.top) / scale,
+    };
+  }, []);
+
+  // Get which handle (if any) is at the given position for a layer
+  const getHandleAtPosition = useCallback((x: number, y: number, layer: CanvasLayer): HandlePosition | null => {
+    const halfHandle = HANDLE_SIZE / 2;
+    const handles: { pos: HandlePosition; cx: number; cy: number }[] = [
+      { pos: 'nw', cx: layer.x, cy: layer.y },
+      { pos: 'n', cx: layer.x + layer.width / 2, cy: layer.y },
+      { pos: 'ne', cx: layer.x + layer.width, cy: layer.y },
+      { pos: 'e', cx: layer.x + layer.width, cy: layer.y + layer.height / 2 },
+      { pos: 'se', cx: layer.x + layer.width, cy: layer.y + layer.height },
+      { pos: 's', cx: layer.x + layer.width / 2, cy: layer.y + layer.height },
+      { pos: 'sw', cx: layer.x, cy: layer.y + layer.height },
+      { pos: 'w', cx: layer.x, cy: layer.y + layer.height / 2 },
+    ];
+
+    for (const handle of handles) {
+      if (
+        x >= handle.cx - halfHandle &&
+        x <= handle.cx + halfHandle &&
+        y >= handle.cy - halfHandle &&
+        y <= handle.cy + halfHandle
+      ) {
+        return handle.pos;
+      }
+    }
+    return null;
+  }, []);
+
+  // Calculate new dimensions based on resize handle and mouse position
+  const calculateResize = useCallback((
+    handle: HandlePosition,
+    currentX: number,
+    currentY: number,
+    start: NonNullable<typeof resizeStart>,
+    shiftKey: boolean
+  ): { x: number; y: number; width: number; height: number } => {
+    let newX = start.layerX;
+    let newY = start.layerY;
+    let newWidth = start.layerWidth;
+    let newHeight = start.layerHeight;
+
+    const deltaX = currentX - start.x;
+    const deltaY = currentY - start.y;
+    const aspectRatio = start.layerWidth / start.layerHeight;
+
+    switch (handle) {
+      case 'e':
+        newWidth = Math.max(20, start.layerWidth + deltaX);
+        if (shiftKey) newHeight = newWidth / aspectRatio;
+        break;
+      case 'w':
+        newWidth = Math.max(20, start.layerWidth - deltaX);
+        newX = start.layerX + (start.layerWidth - newWidth);
+        if (shiftKey) newHeight = newWidth / aspectRatio;
+        break;
+      case 's':
+        newHeight = Math.max(20, start.layerHeight + deltaY);
+        if (shiftKey) newWidth = newHeight * aspectRatio;
+        break;
+      case 'n':
+        newHeight = Math.max(20, start.layerHeight - deltaY);
+        newY = start.layerY + (start.layerHeight - newHeight);
+        if (shiftKey) newWidth = newHeight * aspectRatio;
+        break;
+      case 'se':
+        newWidth = Math.max(20, start.layerWidth + deltaX);
+        newHeight = Math.max(20, start.layerHeight + deltaY);
+        if (shiftKey) {
+          const ratio = Math.max(deltaX / start.layerWidth, deltaY / start.layerHeight);
+          newWidth = Math.max(20, start.layerWidth * (1 + ratio));
+          newHeight = newWidth / aspectRatio;
+        }
+        break;
+      case 'sw':
+        newWidth = Math.max(20, start.layerWidth - deltaX);
+        newHeight = Math.max(20, start.layerHeight + deltaY);
+        newX = start.layerX + (start.layerWidth - newWidth);
+        if (shiftKey) {
+          newHeight = newWidth / aspectRatio;
+        }
+        break;
+      case 'ne':
+        newWidth = Math.max(20, start.layerWidth + deltaX);
+        newHeight = Math.max(20, start.layerHeight - deltaY);
+        newY = start.layerY + (start.layerHeight - newHeight);
+        if (shiftKey) {
+          newHeight = newWidth / aspectRatio;
+          newY = start.layerY + start.layerHeight - newHeight;
+        }
+        break;
+      case 'nw':
+        newWidth = Math.max(20, start.layerWidth - deltaX);
+        newHeight = Math.max(20, start.layerHeight - deltaY);
+        newX = start.layerX + (start.layerWidth - newWidth);
+        newY = start.layerY + (start.layerHeight - newHeight);
+        if (shiftKey) {
+          const ratio = Math.max(-deltaX / start.layerWidth, -deltaY / start.layerHeight);
+          newWidth = Math.max(20, start.layerWidth * (1 + ratio));
+          newHeight = newWidth / aspectRatio;
+          newX = start.layerX + start.layerWidth - newWidth;
+          newY = start.layerY + start.layerHeight - newHeight;
+        }
+        break;
+    }
+
+    return { x: newX, y: newY, width: newWidth, height: newHeight };
+  }, []);
 
   // Load image helper
   const loadImage = useCallback((url: string): Promise<HTMLImageElement> => {
@@ -125,26 +264,168 @@ export default function BannerCanvas() {
             setLoadedImages(prev => new Map(prev).set(layer.content, img!));
           } catch (e) {
             console.error('Failed to load image:', e);
+            // Draw placeholder for failed image
+            ctx.fillStyle = '#e5e7eb';
+            ctx.fillRect(layer.x, layer.y, layer.width, layer.height);
+            ctx.fillStyle = '#9ca3af';
+            ctx.font = '14px system-ui';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Image failed to load', layer.x + layer.width / 2, layer.y + layer.height / 2);
             continue;
           }
         }
         ctx.drawImage(img, layer.x, layer.y, layer.width, layer.height);
-
-        // Draw selection border if selected
-        if (canvasState.selectedObjectIds.includes(layer.id)) {
-          ctx.strokeStyle = '#3b82f6';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
-          ctx.strokeRect(layer.x - 2, layer.y - 2, layer.width + 4, layer.height + 4);
-          ctx.setLineDash([]);
-        }
       } else if (layer.type === 'text') {
-        ctx.fillStyle = rgbToHex(theme.textPrimaryColor);
-        ctx.font = 'bold 24px system-ui';
-        ctx.textAlign = 'left';
+        const style = layer.textStyle || {
+          fontFamily: 'system-ui',
+          fontSize: 24,
+          fontWeight: 'bold' as const,
+          fontStyle: 'normal' as const,
+          color: rgbToHex(theme.textPrimaryColor),
+          textAlign: 'left' as const,
+        };
+
+        ctx.fillStyle = style.color;
+        ctx.font = `${style.fontStyle === 'italic' ? 'italic ' : ''}${style.fontWeight} ${style.fontSize}px ${style.fontFamily}`;
+        ctx.textAlign = style.textAlign;
         ctx.textBaseline = 'top';
-        ctx.fillText(layer.content, layer.x, layer.y);
+
+        // Word wrap support
+        const words = layer.content.split(' ');
+        const maxWidth = layer.width || canvasDimensions.width - layer.x - 20;
+        let line = '';
+        let lineY = layer.y;
+        const lineHeight = style.fontSize * 1.2;
+
+        for (const word of words) {
+          const testLine = line + (line ? ' ' : '') + word;
+          const metrics = ctx.measureText(testLine);
+
+          if (metrics.width > maxWidth && line) {
+            const drawX = style.textAlign === 'center' ? layer.x + maxWidth / 2
+                        : style.textAlign === 'right' ? layer.x + maxWidth
+                        : layer.x;
+            ctx.fillText(line, drawX, lineY);
+            line = word;
+            lineY += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+
+        if (line) {
+          const drawX = style.textAlign === 'center' ? layer.x + maxWidth / 2
+                      : style.textAlign === 'right' ? layer.x + maxWidth
+                      : layer.x;
+          ctx.fillText(line, drawX, lineY);
+        }
+      } else if (layer.type === 'shape') {
+        const style = layer.shapeStyle || {
+          fill: '#3b82f6',
+          stroke: '#1e40af',
+          strokeWidth: 2,
+        };
+
+        ctx.fillStyle = style.fill;
+        ctx.strokeStyle = style.stroke;
+        ctx.lineWidth = style.strokeWidth;
+
+        switch (layer.shapeType) {
+          case 'rectangle':
+            ctx.fillRect(layer.x, layer.y, layer.width, layer.height);
+            if (style.strokeWidth > 0) {
+              ctx.strokeRect(layer.x, layer.y, layer.width, layer.height);
+            }
+            break;
+          case 'circle':
+            ctx.beginPath();
+            ctx.ellipse(
+              layer.x + layer.width / 2,
+              layer.y + layer.height / 2,
+              layer.width / 2,
+              layer.height / 2,
+              0, 0, Math.PI * 2
+            );
+            ctx.fill();
+            if (style.strokeWidth > 0) {
+              ctx.stroke();
+            }
+            break;
+          case 'line':
+            ctx.beginPath();
+            ctx.moveTo(layer.x, layer.y);
+            ctx.lineTo(layer.x + layer.width, layer.y + layer.height);
+            ctx.stroke();
+            break;
+        }
       }
+
+      // Draw selection border and resize handles if selected
+      if (canvasState.selectedObjectIds.includes(layer.id)) {
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(layer.x - 2, layer.y - 2, layer.width + 4, layer.height + 4);
+        ctx.setLineDash([]);
+
+        // Draw resize handles
+        const halfHandle = HANDLE_SIZE / 2;
+        const handles = [
+          { x: layer.x, y: layer.y }, // NW
+          { x: layer.x + layer.width / 2, y: layer.y }, // N
+          { x: layer.x + layer.width, y: layer.y }, // NE
+          { x: layer.x + layer.width, y: layer.y + layer.height / 2 }, // E
+          { x: layer.x + layer.width, y: layer.y + layer.height }, // SE
+          { x: layer.x + layer.width / 2, y: layer.y + layer.height }, // S
+          { x: layer.x, y: layer.y + layer.height }, // SW
+          { x: layer.x, y: layer.y + layer.height / 2 }, // W
+        ];
+
+        for (const handle of handles) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(handle.x - halfHandle, handle.y - halfHandle, HANDLE_SIZE, HANDLE_SIZE);
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(handle.x - halfHandle, handle.y - halfHandle, HANDLE_SIZE, HANDLE_SIZE);
+        }
+      }
+    }
+
+    // Draw shape preview while drawing
+    if (isDrawingShape && shapeDrawStart && shapeDrawCurrent && canvasState.selectedTool === 'shape') {
+      const x = Math.min(shapeDrawStart.x, shapeDrawCurrent.x);
+      const y = Math.min(shapeDrawStart.y, shapeDrawCurrent.y);
+      const width = Math.abs(shapeDrawCurrent.x - shapeDrawStart.x);
+      const height = Math.abs(shapeDrawCurrent.y - shapeDrawStart.y);
+
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+
+      // Use selectedShapeType from context or default to rectangle
+      const shapeType = (canvasState as { selectedShapeType?: string }).selectedShapeType || 'rectangle';
+
+      switch (shapeType) {
+        case 'rectangle':
+          ctx.fillRect(x, y, width, height);
+          ctx.strokeRect(x, y, width, height);
+          break;
+        case 'circle':
+          ctx.beginPath();
+          ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          break;
+        case 'line':
+          ctx.beginPath();
+          ctx.moveTo(shapeDrawStart.x, shapeDrawStart.y);
+          ctx.lineTo(shapeDrawCurrent.x, shapeDrawCurrent.y);
+          ctx.stroke();
+          break;
+      }
+      ctx.setLineDash([]);
     }
 
     // If no layers, draw placeholder text
@@ -162,7 +443,7 @@ export default function BannerCanvas() {
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
 
-  }, [canvasDimensions, theme, selectedCampaign, layers, loadedImages, loadImage, canvasState.selectedObjectIds]);
+  }, [canvasDimensions, theme, selectedCampaign, layers, loadedImages, loadImage, canvasState.selectedObjectIds, canvasState.selectedTool, canvasState, isDrawingShape, shapeDrawStart, shapeDrawCurrent]);
 
   // Re-render on changes
   useEffect(() => {
@@ -239,20 +520,77 @@ export default function BannerCanvas() {
 
       pushLayers([...layers, newLayer]);
       setSelectedObjects([layerId]);
+
+      // Show success toast
+      if (typeof window !== 'undefined' && (window as { showToast?: (msg: string, type: string) => void }).showToast) {
+        (window as { showToast?: (msg: string, type: string) => void }).showToast?.('Image added', 'success');
+      }
     } catch (err) {
       console.error('Failed to parse dropped asset:', err);
+      // Show error toast
+      if (typeof window !== 'undefined' && (window as { showToast?: (msg: string, type: string) => void }).showToast) {
+        (window as { showToast?: (msg: string, type: string) => void }).showToast?.('Failed to add image', 'error');
+      }
     }
   };
 
-  // Handle canvas click for selection
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Handle canvas mouse down
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    const coords = getCanvasCoordinates(e);
+    const { x, y } = coords;
 
-    const rect = canvas.getBoundingClientRect();
-    const scale = calculateScale();
-    const x = (e.clientX - rect.left) / scale;
-    const y = (e.clientY - rect.top) / scale;
+    // Handle text tool - open dialog on click
+    if (canvasState.selectedTool === 'text') {
+      setTextDialogPosition({ x, y });
+      setShowTextDialog(true);
+      return;
+    }
+
+    // Handle shape tool - start drawing
+    if (canvasState.selectedTool === 'shape') {
+      setIsDrawingShape(true);
+      setShapeDrawStart({ x, y });
+      setShapeDrawCurrent({ x, y });
+      return;
+    }
+
+    // For select tool, check if clicking on a selected layer's resize handle
+    if (canvasState.selectedObjectIds.length > 0) {
+      const selectedLayer = layers.find(l => canvasState.selectedObjectIds.includes(l.id));
+      if (selectedLayer) {
+        const handle = getHandleAtPosition(x, y, selectedLayer);
+        if (handle) {
+          setIsResizing(true);
+          setActiveHandle(handle);
+          setResizeStart({
+            x,
+            y,
+            layerX: selectedLayer.x,
+            layerY: selectedLayer.y,
+            layerWidth: selectedLayer.width,
+            layerHeight: selectedLayer.height,
+          });
+          return;
+        }
+
+        // Check if clicking inside the selected layer (for dragging)
+        if (
+          x >= selectedLayer.x &&
+          x <= selectedLayer.x + selectedLayer.width &&
+          y >= selectedLayer.y &&
+          y <= selectedLayer.y + selectedLayer.height
+        ) {
+          setIsDragging(true);
+          setDragStart({
+            x,
+            y,
+            layerX: selectedLayer.x,
+            layerY: selectedLayer.y,
+          });
+          return;
+        }
+      }
+    }
 
     // Find clicked layer (top-most first)
     const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
@@ -264,12 +602,185 @@ export default function BannerCanvas() {
         y <= layer.y + layer.height
       ) {
         setSelectedObjects([layer.id]);
+        // Start dragging immediately if we just selected
+        setIsDragging(true);
+        setDragStart({
+          x,
+          y,
+          layerX: layer.x,
+          layerY: layer.y,
+        });
         return;
       }
     }
 
     // Clicked on empty area
     setSelectedObjects([]);
+  };
+
+  // Handle canvas mouse move
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    const coords = getCanvasCoordinates(e);
+    const { x, y } = coords;
+
+    // Handle shape drawing preview
+    if (isDrawingShape && canvasState.selectedTool === 'shape') {
+      setShapeDrawCurrent({ x, y });
+      return;
+    }
+
+    // Handle dragging
+    if (isDragging && dragStart && canvasState.selectedObjectIds.length > 0) {
+      const deltaX = x - dragStart.x;
+      const deltaY = y - dragStart.y;
+
+      const updatedLayers = layers.map(layer => {
+        if (canvasState.selectedObjectIds.includes(layer.id)) {
+          return {
+            ...layer,
+            x: Math.max(0, Math.min(dragStart.layerX + deltaX, canvasDimensions.width - layer.width)),
+            y: Math.max(0, Math.min(dragStart.layerY + deltaY, canvasDimensions.height - layer.height)),
+          };
+        }
+        return layer;
+      });
+
+      // Update layers without pushing to history (will push on mouse up)
+      pushLayers(updatedLayers);
+      return;
+    }
+
+    // Handle resizing
+    if (isResizing && resizeStart && activeHandle && canvasState.selectedObjectIds.length > 0) {
+      const newDimensions = calculateResize(activeHandle, x, y, resizeStart, e.shiftKey);
+
+      const updatedLayers = layers.map(layer => {
+        if (canvasState.selectedObjectIds.includes(layer.id)) {
+          return {
+            ...layer,
+            x: Math.max(0, newDimensions.x),
+            y: Math.max(0, newDimensions.y),
+            width: newDimensions.width,
+            height: newDimensions.height,
+          };
+        }
+        return layer;
+      });
+
+      pushLayers(updatedLayers);
+      return;
+    }
+
+    // Update cursor based on hover position
+    if (canvasState.selectedObjectIds.length > 0) {
+      const selectedLayer = layers.find(l => canvasState.selectedObjectIds.includes(l.id));
+      if (selectedLayer) {
+        const handle = getHandleAtPosition(x, y, selectedLayer);
+        if (handle) {
+          setCursorStyle(HANDLE_CURSORS[handle]);
+          return;
+        }
+
+        if (
+          x >= selectedLayer.x &&
+          x <= selectedLayer.x + selectedLayer.width &&
+          y >= selectedLayer.y &&
+          y <= selectedLayer.y + selectedLayer.height
+        ) {
+          setCursorStyle('move');
+          return;
+        }
+      }
+    }
+
+    setCursorStyle('default');
+  };
+
+  // Handle canvas mouse up
+  const handleCanvasMouseUp = (e: React.MouseEvent) => {
+    // Finalize shape drawing
+    if (isDrawingShape && shapeDrawStart && shapeDrawCurrent && canvasState.selectedTool === 'shape') {
+      const x = Math.min(shapeDrawStart.x, shapeDrawCurrent.x);
+      const y = Math.min(shapeDrawStart.y, shapeDrawCurrent.y);
+      const width = Math.abs(shapeDrawCurrent.x - shapeDrawStart.x);
+      const height = Math.abs(shapeDrawCurrent.y - shapeDrawStart.y);
+
+      // Only create shape if it has some size
+      if (width > 5 && height > 5) {
+        const shapeType = ((canvasState as { selectedShapeType?: string }).selectedShapeType || 'rectangle') as 'rectangle' | 'circle' | 'line';
+        const layerId = `layer-${Date.now()}`;
+        const newLayer: CanvasLayer = {
+          id: layerId,
+          type: 'shape',
+          x,
+          y,
+          width,
+          height,
+          content: '',
+          zIndex: layers.length,
+          shapeType,
+          shapeStyle: {
+            fill: '#3b82f6',
+            stroke: '#1e40af',
+            strokeWidth: 2,
+          },
+        };
+
+        pushLayers([...layers, newLayer]);
+        setSelectedObjects([layerId]);
+        setCanvasTool('select');
+
+        // Show success toast
+        if (typeof window !== 'undefined' && (window as { showToast?: (msg: string, type: string) => void }).showToast) {
+          (window as { showToast?: (msg: string, type: string) => void }).showToast?.('Shape added', 'success');
+        }
+      }
+
+      setIsDrawingShape(false);
+      setShapeDrawStart(null);
+      setShapeDrawCurrent(null);
+      return;
+    }
+
+    // End dragging/resizing
+    setIsDragging(false);
+    setIsResizing(false);
+    setActiveHandle(null);
+    setDragStart(null);
+    setResizeStart(null);
+  };
+
+  // Handle text dialog submit
+  const handleTextDialogSubmit = (result: TextDialogResult) => {
+    const layerId = `layer-${Date.now()}`;
+    const newLayer: CanvasLayer = {
+      id: layerId,
+      type: 'text',
+      x: textDialogPosition.x,
+      y: textDialogPosition.y,
+      width: 200,
+      height: result.fontSize * 1.5,
+      content: result.text,
+      zIndex: layers.length,
+      textStyle: {
+        fontFamily: result.fontFamily,
+        fontSize: result.fontSize,
+        fontWeight: result.bold ? 'bold' : 'normal',
+        fontStyle: result.italic ? 'italic' : 'normal',
+        color: result.color,
+        textAlign: 'left',
+      },
+    };
+
+    pushLayers([...layers, newLayer]);
+    setSelectedObjects([layerId]);
+    setShowTextDialog(false);
+    setCanvasTool('select');
+
+    // Show success toast
+    if (typeof window !== 'undefined' && (window as { showToast?: (msg: string, type: string) => void }).showToast) {
+      (window as { showToast?: (msg: string, type: string) => void }).showToast?.('Text created', 'success');
+    }
   };
 
   // Delete selected layer
@@ -408,12 +919,26 @@ export default function BannerCanvas() {
         <button
           className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
           onClick={() => {
-            const canvas = canvasRef.current;
-            if (canvas) {
+            try {
+              const canvas = canvasRef.current;
+              if (!canvas) {
+                throw new Error('Canvas not available');
+              }
               const link = document.createElement('a');
               link.download = `${selectedCampaign?.slug || 'banner'}-${selectedPreset}.png`;
               link.href = canvas.toDataURL('image/png');
               link.click();
+
+              // Show success toast
+              if (typeof window !== 'undefined' && (window as { showToast?: (msg: string, type: string) => void }).showToast) {
+                (window as { showToast?: (msg: string, type: string) => void }).showToast?.('Image exported successfully', 'success');
+              }
+            } catch (err) {
+              console.error('Failed to export canvas:', err);
+              // Show error toast
+              if (typeof window !== 'undefined' && (window as { showToast?: (msg: string, type: string) => void }).showToast) {
+                (window as { showToast?: (msg: string, type: string) => void }).showToast?.('Failed to export image. Some images may have CORS restrictions.', 'error');
+              }
             }
           }}
         >
@@ -454,12 +979,18 @@ export default function BannerCanvas() {
 
           <canvas
             ref={canvasRef}
-            className="relative cursor-crosshair"
+            className="relative"
             style={{
               width: canvasDimensions.width,
               height: canvasDimensions.height,
+              cursor: canvasState.selectedTool === 'text' ? 'text'
+                    : canvasState.selectedTool === 'shape' ? 'crosshair'
+                    : cursorStyle,
             }}
-            onClick={handleCanvasClick}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
           />
 
           {/* Drop overlay */}
@@ -485,6 +1016,10 @@ export default function BannerCanvas() {
       <div className="p-3 bg-white border-t border-gray-200 text-center text-sm text-gray-500">
         {!selectedCampaign ? (
           'Select a campaign to start designing'
+        ) : canvasState.selectedTool === 'text' ? (
+          'Click on the canvas to add text'
+        ) : canvasState.selectedTool === 'shape' ? (
+          'Click and drag to draw a shape'
         ) : layers.length === 0 ? (
           <>
             Drag images from the Asset Library to add them to the canvas.
@@ -496,11 +1031,19 @@ export default function BannerCanvas() {
             {layers.length} layer(s)
             <span className="mx-2">|</span>
             {canvasState.selectedObjectIds.length > 0
-              ? 'Press Delete to remove selected'
+              ? 'Drag to move, drag handles to resize, Delete to remove'
               : 'Click a layer to select'}
           </>
         )}
       </div>
+
+      {/* Text Input Dialog */}
+      {showTextDialog && (
+        <TextInputDialog
+          onSubmit={handleTextDialogSubmit}
+          onCancel={() => setShowTextDialog(false)}
+        />
+      )}
     </div>
   );
 }

@@ -58,6 +58,7 @@ export default function CanvasToolbar() {
   const {
     canvasState,
     setCanvasTool,
+    setSelectedShapeType,
     setCanvasZoom,
     canUndo,
     canRedo,
@@ -99,7 +100,12 @@ export default function CanvasToolbar() {
         {canvasState.selectedTool === 'shape' && (
           <div className="flex items-center gap-1">
             <button
-              className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              onClick={() => setSelectedShapeType('rectangle')}
+              className={`p-2 rounded-md transition-colors ${
+                canvasState.selectedShapeType === 'rectangle'
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
               title="Rectangle"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,7 +113,12 @@ export default function CanvasToolbar() {
               </svg>
             </button>
             <button
-              className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              onClick={() => setSelectedShapeType('circle')}
+              className={`p-2 rounded-md transition-colors ${
+                canvasState.selectedShapeType === 'circle'
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
               title="Circle"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,7 +126,12 @@ export default function CanvasToolbar() {
               </svg>
             </button>
             <button
-              className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              onClick={() => setSelectedShapeType('line')}
+              className={`p-2 rounded-md transition-colors ${
+                canvasState.selectedShapeType === 'line'
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
               title="Line"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

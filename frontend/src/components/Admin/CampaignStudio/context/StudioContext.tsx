@@ -3,8 +3,39 @@ import { Campaign, CampaignTheme, CampaignTask, WellnessTask, getThemePresets, g
 
 export type ThemeMode = 'manual' | 'campaign';
 
+// Layer types - shared with BannerCanvas
+export interface TextStyle {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  color: string;
+  textAlign: 'left' | 'center' | 'right';
+}
+
+export interface ShapeStyle {
+  fill: string;
+  stroke: string;
+  strokeWidth: number;
+}
+
+export interface CanvasLayer {
+  id: string;
+  type: 'image' | 'text' | 'shape';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  content: string;
+  zIndex: number;
+  textStyle?: TextStyle;
+  shapeType?: 'rectangle' | 'circle' | 'line';
+  shapeStyle?: ShapeStyle;
+}
+
 export interface CanvasState {
   selectedTool: 'select' | 'text' | 'shape' | 'image' | 'pan';
+  selectedShapeType: 'rectangle' | 'circle' | 'line';
   zoom: number;
   selectedObjectIds: string[];
   history: unknown[];
@@ -56,12 +87,19 @@ interface StudioContextType {
   // Canvas State
   canvasState: CanvasState;
   setCanvasTool: (tool: CanvasState['selectedTool']) => void;
+  setSelectedShapeType: (shapeType: CanvasState['selectedShapeType']) => void;
   setCanvasZoom: (zoom: number) => void;
   setSelectedObjects: (ids: string[]) => void;
   canUndo: boolean;
   canRedo: boolean;
   undo: () => void;
   redo: () => void;
+
+  // Layer State (shared with BannerCanvas)
+  layers: CanvasLayer[];
+  setLayers: (layers: CanvasLayer[]) => void;
+  updateLayer: (layerId: string, updates: Partial<CanvasLayer>) => void;
+  getSelectedLayer: () => CanvasLayer | null;
 
   // Preview State
   previewState: PreviewState;
@@ -138,6 +176,7 @@ export function StudioProvider({ children }: StudioProviderProps) {
   // Canvas state
   const [canvasState, setCanvasState] = useState<CanvasState>({
     selectedTool: 'select',
+    selectedShapeType: 'rectangle',
     zoom: 1,
     selectedObjectIds: [],
     history: [],
@@ -172,6 +211,9 @@ export function StudioProvider({ children }: StudioProviderProps) {
   const [selectedAssetType, setSelectedAssetType] = useState<'banner' | 'poster' | 'email' | 'chat' | 'all'>('all');
   const [leftPanelTab, setLeftPanelTab] = useState<'campaigns' | 'assets' | 'layers'>('campaigns');
   const [rightPanelTab, setRightPanelTab] = useState<'properties' | 'theme' | 'tasks' | 'ai'>('theme');
+
+  // Layer state (lifted from BannerCanvas for PropertiesPanel access)
+  const [layers, setLayersState] = useState<CanvasLayer[]>([]);
 
   // Task state
   const [campaignTasks, setCampaignTasks] = useState<CampaignTask[]>([]);
@@ -292,6 +334,28 @@ export function StudioProvider({ children }: StudioProviderProps) {
     setCanvasState(prev => ({ ...prev, selectedTool: tool }));
   }, []);
 
+  const setSelectedShapeType = useCallback((shapeType: CanvasState['selectedShapeType']) => {
+    setCanvasState(prev => ({ ...prev, selectedShapeType: shapeType, selectedTool: 'shape' }));
+  }, []);
+
+  // Layer management
+  const setLayers = useCallback((newLayers: CanvasLayer[]) => {
+    setLayersState(newLayers);
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const updateLayer = useCallback((layerId: string, updates: Partial<CanvasLayer>) => {
+    setLayersState(prev => prev.map(layer =>
+      layer.id === layerId ? { ...layer, ...updates } : layer
+    ));
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const getSelectedLayer = useCallback((): CanvasLayer | null => {
+    if (canvasState.selectedObjectIds.length === 0) return null;
+    return layers.find(l => canvasState.selectedObjectIds.includes(l.id)) || null;
+  }, [canvasState.selectedObjectIds, layers]);
+
   const setCanvasZoom = useCallback((zoom: number) => {
     setCanvasState(prev => ({ ...prev, zoom: Math.max(0.1, Math.min(3, zoom)) }));
   }, []);
@@ -385,12 +449,19 @@ export function StudioProvider({ children }: StudioProviderProps) {
     // Canvas
     canvasState,
     setCanvasTool,
+    setSelectedShapeType,
     setCanvasZoom,
     setSelectedObjects,
     canUndo,
     canRedo,
     undo,
     redo,
+
+    // Layers
+    layers,
+    setLayers,
+    updateLayer,
+    getSelectedLayer,
 
     // Preview
     previewState,

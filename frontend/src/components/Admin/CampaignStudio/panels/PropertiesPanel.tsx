@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStudio } from '../context/StudioContext';
 import { updateCampaign } from '../../../../services/api';
 
@@ -8,6 +8,8 @@ export default function PropertiesPanel() {
     selectCampaign,
     canvasState,
     setHasUnsavedChanges,
+    getSelectedLayer,
+    updateLayer,
   } = useStudio();
 
   const [saving, setSaving] = useState(false);
@@ -16,6 +18,74 @@ export default function PropertiesPanel() {
   const [isEditing, setIsEditing] = useState(false);
 
   const hasSelectedObjects = canvasState.selectedObjectIds.length > 0;
+  const selectedLayer = getSelectedLayer();
+
+  // Local state for property inputs
+  const [posX, setPosX] = useState(0);
+  const [posY, setPosY] = useState(0);
+  const [width, setWidth] = useState(100);
+  const [height, setHeight] = useState(100);
+  const [opacity, setOpacity] = useState(100);
+
+  // Text-specific state
+  const [textColor, setTextColor] = useState('#000000');
+  const [fontSize, setFontSize] = useState(24);
+  const [fontFamily, setFontFamily] = useState('Arial');
+
+  // Shape-specific state
+  const [shapeFill, setShapeFill] = useState('#3b82f6');
+  const [shapeStroke, setShapeStroke] = useState('#1e40af');
+  const [strokeWidth, setStrokeWidth] = useState(2);
+
+  // Sync local state with selected layer
+  useEffect(() => {
+    if (selectedLayer) {
+      setPosX(Math.round(selectedLayer.x));
+      setPosY(Math.round(selectedLayer.y));
+      setWidth(Math.round(selectedLayer.width));
+      setHeight(Math.round(selectedLayer.height));
+
+      if (selectedLayer.type === 'text' && selectedLayer.textStyle) {
+        setTextColor(selectedLayer.textStyle.color);
+        setFontSize(selectedLayer.textStyle.fontSize);
+        setFontFamily(selectedLayer.textStyle.fontFamily);
+      }
+
+      if (selectedLayer.type === 'shape' && selectedLayer.shapeStyle) {
+        setShapeFill(selectedLayer.shapeStyle.fill);
+        setShapeStroke(selectedLayer.shapeStyle.stroke);
+        setStrokeWidth(selectedLayer.shapeStyle.strokeWidth);
+      }
+    }
+  }, [selectedLayer]);
+
+  // Update layer position
+  const handlePositionChange = (axis: 'x' | 'y', value: number) => {
+    if (!selectedLayer) return;
+    updateLayer(selectedLayer.id, { [axis]: value });
+  };
+
+  // Update layer size
+  const handleSizeChange = (dimension: 'width' | 'height', value: number) => {
+    if (!selectedLayer) return;
+    updateLayer(selectedLayer.id, { [dimension]: Math.max(1, value) });
+  };
+
+  // Update text style
+  const handleTextStyleChange = (updates: Partial<typeof selectedLayer.textStyle>) => {
+    if (!selectedLayer || selectedLayer.type !== 'text') return;
+    updateLayer(selectedLayer.id, {
+      textStyle: { ...selectedLayer.textStyle!, ...updates },
+    });
+  };
+
+  // Update shape style
+  const handleShapeStyleChange = (updates: Partial<typeof selectedLayer.shapeStyle>) => {
+    if (!selectedLayer || selectedLayer.type !== 'shape') return;
+    updateLayer(selectedLayer.id, {
+      shapeStyle: { ...selectedLayer.shapeStyle!, ...updates },
+    });
+  };
 
   const startEditing = () => {
     if (selectedCampaign) {
@@ -51,13 +121,13 @@ export default function PropertiesPanel() {
   };
 
   // Show canvas object properties if something is selected
-  if (hasSelectedObjects) {
+  if (hasSelectedObjects && selectedLayer) {
     return (
       <div className="flex flex-col h-full">
         <div className="p-3 border-b border-gray-200">
           <h3 className="font-medium text-gray-900">Object Properties</h3>
           <p className="text-xs text-gray-500 mt-1">
-            {canvasState.selectedObjectIds.length} object(s) selected
+            {selectedLayer.type.charAt(0).toUpperCase() + selectedLayer.type.slice(1)} Layer
           </p>
         </div>
 
@@ -70,16 +140,26 @@ export default function PropertiesPanel() {
                 <label className="block text-xs text-gray-500 mb-1">X</label>
                 <input
                   type="number"
-                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
-                  placeholder="0"
+                  value={posX}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setPosX(val);
+                    handlePositionChange('x', val);
+                  }}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Y</label>
                 <input
                   type="number"
-                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
-                  placeholder="0"
+                  value={posY}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setPosY(val);
+                    handlePositionChange('y', val);
+                  }}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -93,40 +173,177 @@ export default function PropertiesPanel() {
                 <label className="block text-xs text-gray-500 mb-1">Width</label>
                 <input
                   type="number"
-                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
-                  placeholder="100"
+                  value={width}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setWidth(val);
+                    handleSizeChange('width', val);
+                  }}
+                  min="1"
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Height</label>
                 <input
                   type="number"
-                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
-                  placeholder="100"
+                  value={height}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setHeight(val);
+                    handleSizeChange('height', val);
+                  }}
+                  min="1"
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
           </div>
 
-          {/* Rotation */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rotation</label>
-            <input
-              type="number"
-              className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
-              placeholder="0"
-              min="0"
-              max="360"
-            />
-          </div>
+          {/* Text-specific properties */}
+          {selectedLayer.type === 'text' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Text Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={textColor}
+                    onChange={(e) => {
+                      setTextColor(e.target.value);
+                      handleTextStyleChange({ color: e.target.value });
+                    }}
+                    className="w-10 h-10 border border-gray-300 rounded-md cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={textColor}
+                    onChange={(e) => {
+                      setTextColor(e.target.value);
+                      handleTextStyleChange({ color: e.target.value });
+                    }}
+                    className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
 
-          {/* Opacity */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Font Size</label>
+                <input
+                  type="number"
+                  value={fontSize}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 12;
+                    setFontSize(val);
+                    handleTextStyleChange({ fontSize: val });
+                  }}
+                  min="8"
+                  max="200"
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Font Family</label>
+                <select
+                  value={fontFamily}
+                  onChange={(e) => {
+                    setFontFamily(e.target.value);
+                    handleTextStyleChange({ fontFamily: e.target.value });
+                  }}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="Arial">Arial</option>
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Verdana">Verdana</option>
+                  <option value="Courier New">Courier New</option>
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Shape-specific properties */}
+          {selectedLayer.type === 'shape' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fill Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={shapeFill}
+                    onChange={(e) => {
+                      setShapeFill(e.target.value);
+                      handleShapeStyleChange({ fill: e.target.value });
+                    }}
+                    className="w-10 h-10 border border-gray-300 rounded-md cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={shapeFill}
+                    onChange={(e) => {
+                      setShapeFill(e.target.value);
+                      handleShapeStyleChange({ fill: e.target.value });
+                    }}
+                    className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Stroke Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={shapeStroke}
+                    onChange={(e) => {
+                      setShapeStroke(e.target.value);
+                      handleShapeStyleChange({ stroke: e.target.value });
+                    }}
+                    className="w-10 h-10 border border-gray-300 rounded-md cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={shapeStroke}
+                    onChange={(e) => {
+                      setShapeStroke(e.target.value);
+                      handleShapeStyleChange({ stroke: e.target.value });
+                    }}
+                    className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Stroke Width</label>
+                <input
+                  type="number"
+                  value={strokeWidth}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setStrokeWidth(val);
+                    handleShapeStyleChange({ strokeWidth: val });
+                  }}
+                  min="0"
+                  max="20"
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Opacity (works for all types) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Opacity</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Opacity: {opacity}%
+            </label>
             <input
               type="range"
               min="0"
               max="100"
+              value={opacity}
+              onChange={(e) => setOpacity(parseInt(e.target.value))}
               className="w-full"
             />
           </div>
