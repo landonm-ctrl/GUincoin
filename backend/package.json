@@ -5,9 +5,9 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "cd ../frontend && npm install && npm run build && cd ../backend && tsc",
+    "build": "tsc",
     "build:backend": "tsc",
-    "start": "npx prisma migrate deploy && node dist/server.js",
+    "start": "node dist/server.js",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
     "studio": "prisma studio",
