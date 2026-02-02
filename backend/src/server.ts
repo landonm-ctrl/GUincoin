@@ -129,7 +129,7 @@ app.use('/api', notFoundHandler);
 
 // Serve frontend static files in production
 if (env.NODE_ENV === 'production') {
-  const frontendBuildPath = path.join(__dirname, '../../frontend-dist');
+  const frontendBuildPath = path.join(__dirname, '../frontend-dist');
 
   // Serve static files
   app.use(express.static(frontendBuildPath));
