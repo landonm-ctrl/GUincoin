@@ -40,6 +40,10 @@ const toAppError = (error: unknown): AppError => {
   return new AppError('Internal server error', 500, { expose: false });
 };
 
+export const notFoundHandler = (req: Request, res: Response) => {
+  res.status(404).json({ error: `Not found: ${req.method} ${req.originalUrl}` });
+};
+
 export const errorHandler = (
   err: unknown,
   req: Request,

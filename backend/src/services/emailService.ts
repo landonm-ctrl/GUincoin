@@ -221,6 +221,42 @@ export class EmailService {
     if (!rendered) return;
     await this.sendEmail(employeeEmail, rendered.subject, rendered.html);
   }
+  /**
+   * Send notification when a role is assigned to an employee
+   */
+  async sendRoleAssignedNotification(
+    employeeEmail: string,
+    employeeName: string,
+    role: string,
+    _isManager?: boolean,
+    _isAdmin?: boolean
+  ) {
+    const rendered = await renderTemplate('role_assigned', {
+      employeeName,
+      role,
+    });
+
+    if (!rendered) return;
+    await this.sendEmail(employeeEmail, rendered.subject, rendered.html);
+  }
+
+  /**
+   * Send notification when allotment deposit is made
+   */
+  async sendAllotmentDepositNotification(
+    managerEmail: string,
+    managerName: string,
+    amount: number,
+    _newBalance?: number
+  ) {
+    const rendered = await renderTemplate('allotment_deposit', {
+      managerName,
+      amount,
+    });
+
+    if (!rendered) return;
+    await this.sendEmail(managerEmail, rendered.subject, rendered.html);
+  }
 }
 
 export default new EmailService();

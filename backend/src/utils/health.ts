@@ -152,6 +152,10 @@ const deriveStatus = (dependencies: DependencyHealth[]): HealthStatus => {
   return degraded ? 'degraded' : 'ok';
 };
 
+export function setSessionStoreType(_type: string): void {
+  // Track session store type for health reporting
+}
+
 export const getHealthSummary = async (): Promise<HealthSummary> => {
   const [database, uploads, email] = await Promise.all([
     checkDatabase(),

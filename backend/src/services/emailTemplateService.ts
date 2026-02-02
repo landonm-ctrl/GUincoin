@@ -8,7 +8,9 @@ export type EmailTemplateKey =
   | 'peer_transfer_recipient_not_found'
   | 'wellness_approved'
   | 'wellness_rejected'
-  | 'purchase_fulfilled';
+  | 'purchase_fulfilled'
+  | 'role_assigned'
+  | 'allotment_deposit';
 
 export interface EmailTemplateDefinition {
   key: EmailTemplateKey;

@@ -13,20 +13,16 @@ if (!hasSmtpCredentials) {
 
 export const isEmailConfigured = hasSmtpCredentials;
 
-const transporter = nodemailer.createTransport(
-  hasSmtpCredentials
-    ? {
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587', 10),
-        secure: Number(process.env.SMTP_PORT) === 465,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      }
-    : {
-        jsonTransport: true,
-      }
-);
+const transporter = hasSmtpCredentials
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    })
+  : nodemailer.createTransport({ jsonTransport: true });
 
 export default transporter;

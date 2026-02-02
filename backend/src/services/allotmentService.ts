@@ -52,7 +52,10 @@ export class AllotmentService {
       ...allotment,
       usedAmount: Number(usedAmount),
       remaining: Number(allotment.amount) - Number(usedAmount),
-    };
+      balance: Number(allotment.amount) - Number(usedAmount),
+      recurringBudget: Number(allotment.amount),
+      usedThisPeriod: Number(usedAmount),
+    } as any;
   }
 
   /**
@@ -170,6 +173,41 @@ export class AllotmentService {
       limit,
       offset,
     };
+  }
+
+  /**
+   * Set recurring budget for a manager's allotment
+   */
+  async setRecurringBudget(managerId: string, amount: number, periodType: PeriodType) {
+    const allotment = await this.getCurrentAllotment(managerId, periodType);
+    return prisma.managerAllotment.update({
+      where: { id: allotment.id },
+      data: { amount },
+    });
+  }
+
+  /**
+   * Deposit coins into a manager's allotment
+   */
+  async depositAllotment(managerId: string, amount: number, _description?: string, _adminId?: string) {
+    const allotment = await this.getCurrentAllotment(managerId);
+    const updated = await prisma.managerAllotment.update({
+      where: { id: allotment.id },
+      data: { amount: { increment: amount } },
+    });
+    return { ...updated, description: _description || 'Allotment deposit' } as any;
+  }
+
+  /**
+   * Get deposit history for a manager
+   */
+  async getDepositHistory(managerId: string, _limit?: number) {
+    const allotments = await prisma.managerAllotment.findMany({
+      where: { managerId },
+      orderBy: { periodStart: 'desc' },
+      take: _limit || 20,
+    });
+    return { transactions: allotments as any[] };
   }
 
   /**

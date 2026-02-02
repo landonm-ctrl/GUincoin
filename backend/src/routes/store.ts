@@ -66,9 +66,9 @@ router.get('/products', requireAuth, async (req: AuthRequest, res) => {
       orderBy: { createdAt: 'desc' },
     });
     const normalized = products.map(normalizeStoreProduct);
-    const response = normalized.map((product) => ({
+    const response = normalized.map((product: any) => ({
       ...product,
-      imageUrls: product.imageUrls.map((url) =>
+      imageUrls: product.imageUrls.map((url: string) =>
         isAmazonImageUrl(url) ? toAmazonProxyUrl(req, url) : url
       ),
     }));

@@ -12,6 +12,7 @@ export class AppError extends Error {
   public readonly expose: boolean;
   public readonly code?: string;
   public readonly details?: unknown;
+  public readonly rootCause?: Error;
 
   constructor(message: string, statusCode = 500, options?: AppErrorOptions) {
     super(message);
@@ -22,7 +23,7 @@ export class AppError extends Error {
     this.details = options?.details;
 
     if (options?.cause instanceof Error) {
-      this.cause = options.cause;
+      this.rootCause = options.cause;
     }
   }
 }

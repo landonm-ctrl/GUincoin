@@ -66,8 +66,8 @@ router.get(
       const history = await transactionService.getTransactionHistory(
         employee.account.id,
         {
-          limit: req.query.limit as number,
-          offset: req.query.offset as number,
+          limit: Number(req.query.limit) || 20,
+          offset: Number(req.query.offset) || 0,
           status: req.query.status as any,
           transactionType: req.query.transactionType as any,
         }
