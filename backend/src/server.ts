@@ -130,13 +130,27 @@ app.use('/api', notFoundHandler);
 // Serve frontend static files in production
 if (env.NODE_ENV === 'production') {
   const frontendBuildPath = path.join(__dirname, '../frontend-dist');
+  const fs = require('fs');
+
+  // Debug: Check if frontend build exists
+  console.log(`[Frontend] Looking for build at: ${frontendBuildPath}`);
+  console.log(`[Frontend] __dirname is: ${__dirname}`);
+  console.log(`[Frontend] Directory exists: ${fs.existsSync(frontendBuildPath)}`);
+  if (fs.existsSync(frontendBuildPath)) {
+    console.log(`[Frontend] Contents: ${fs.readdirSync(frontendBuildPath).join(', ')}`);
+  }
 
   // Serve static files
   app.use(express.static(frontendBuildPath));
 
   // Catch-all route for client-side routing (React Router)
   app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendBuildPath, 'index.html'));
+    const indexPath = path.join(frontendBuildPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send(`Frontend not found. Looking at: ${frontendBuildPath}`);
+    }
   });
 }
 
