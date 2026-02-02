@@ -1,4 +1,3 @@
-// @ts-ignore - openai is an optional dependency
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
