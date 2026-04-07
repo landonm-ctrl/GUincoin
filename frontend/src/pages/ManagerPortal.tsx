@@ -114,7 +114,7 @@ export default function ManagerPortal() {
               </p>
             </div>
             {allotment && (
-              <span className={`absolute top-2 right-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+              <span className={`absolute top-2 right-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-xs font-bold ${
                 activeTab === 'award'
                   ? 'bg-blue-500 text-white'
                   : 'bg-gray-200 text-gray-700'
