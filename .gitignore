@@ -36,3 +36,6 @@ uploads/*
 *.db
 *.sqlite
 
+# Claude Code
+.claude/
+
