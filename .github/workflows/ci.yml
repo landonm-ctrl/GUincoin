@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install backend deps
+        working-directory: backend
+        run: npm install
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm install
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install backend deps
+        working-directory: backend
+        run: npm install
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+      - name: Typecheck backend
+        working-directory: backend
+        run: npm run typecheck
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm install
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install and build backend
+        working-directory: backend
+        run: |
+          npm install
+          npx prisma generate
+          npm run build
+      - name: Install and build frontend
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Audit backend
+        working-directory: backend
+        run: npm audit --audit-level=high || true
+      - name: Audit frontend
+        working-directory: frontend
+        run: npm audit --audit-level=high || true

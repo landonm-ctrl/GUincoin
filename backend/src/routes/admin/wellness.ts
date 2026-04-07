@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { requireAuth, AuthRequest } from '../../middleware/auth';
+import { AuthRequest } from '../../middleware/auth';
 import { validate } from '../../middleware/validation';
 import prisma from '../../config/database';
 import transactionService from '../../services/transactionService';
@@ -8,6 +8,7 @@ import accountService from '../../services/accountService';
 import emailService from '../../services/emailService';
 import { upload, getFileUrl } from '../../services/fileService';
 import { AppError } from '../../utils/errors';
+import { validateUploadedFile } from '../../utils/fileValidation';
 import { FrequencyRule } from '@prisma/client';
 import { toNumber } from '../../utils/number';
 
@@ -25,10 +26,13 @@ const wellnessTaskSchema = z.object({
 // Create wellness task
 router.post(
   '/wellness/tasks',
-  requireAuth,
   upload.single('template'),
   async (req: AuthRequest, res, next) => {
     try {
+      if (req.file) {
+        await validateUploadedFile(req.file.path, 'document');
+      }
+
       const normalizedBody = { ...req.body };
       if (normalizedBody.maxRewardedUsers === '') {
         delete normalizedBody.maxRewardedUsers;
@@ -63,7 +67,7 @@ router.post(
 );
 
 // Get all wellness tasks (including inactive)
-router.get('/wellness/tasks', requireAuth, async (_req: AuthRequest, res, next) => {
+router.get('/wellness/tasks', async (_req: AuthRequest, res, next) => {
   try {
     const tasks = await prisma.wellnessTask.findMany({
       orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
@@ -81,7 +85,7 @@ router.get('/wellness/tasks', requireAuth, async (_req: AuthRequest, res, next) 
 });
 
 // Delete wellness task (set inactive to preserve data)
-router.delete('/wellness/tasks/:id', requireAuth, async (req: AuthRequest, res, next) => {
+router.delete('/wellness/tasks/:id', async (req: AuthRequest, res, next) => {
   try {
     const task = await prisma.wellnessTask.findUnique({
       where: { id: req.params.id },
@@ -104,7 +108,7 @@ router.delete('/wellness/tasks/:id', requireAuth, async (req: AuthRequest, res, 
 });
 
 // Get all users with their wellness submissions
-router.get('/wellness/users', requireAuth, async (_req: AuthRequest, res, next) => {
+router.get('/wellness/users', async (_req: AuthRequest, res, next) => {
   try {
     const users = await prisma.employee.findMany({
       include: {
@@ -156,7 +160,7 @@ router.get('/wellness/users', requireAuth, async (_req: AuthRequest, res, next) 
 });
 
 // Get wellness submissions for a specific user
-router.get('/wellness/users/:id/submissions', requireAuth, async (req: AuthRequest, res, next) => {
+router.get('/wellness/users/:id/submissions', async (req: AuthRequest, res, next) => {
   try {
     const submissions = await prisma.wellnessSubmission.findMany({
       where: { employeeId: req.params.id },
@@ -188,7 +192,7 @@ router.get('/wellness/users/:id/submissions', requireAuth, async (req: AuthReque
 });
 
 // Get pending wellness submissions
-router.get('/wellness/pending', requireAuth, async (req: AuthRequest, res, next) => {
+router.get('/wellness/pending', async (req: AuthRequest, res, next) => {
   try {
     const submissions = await prisma.wellnessSubmission.findMany({
       where: { status: 'pending' },
@@ -235,7 +239,6 @@ const approveSchema = z.object({
 
 router.post(
   '/wellness/:id/approve',
-  requireAuth,
   validate(approveSchema),
   async (req: AuthRequest, res, next) => {
     try {
@@ -357,7 +360,6 @@ const rejectSchema = z.object({
 
 router.post(
   '/wellness/:id/reject',
-  requireAuth,
   validate(rejectSchema),
   async (req: AuthRequest, res, next) => {
     try {

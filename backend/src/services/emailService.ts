@@ -1,5 +1,6 @@
 import transporter from '../config/email';
 import { renderTemplate } from './emailTemplateService';
+import logger from '../config/logger';
 
 export class EmailService {
   private fromEmail = process.env.SMTP_USER || 'noreply@guincoin.com';
@@ -18,7 +19,7 @@ export class EmailService {
         html,
       });
     } catch (error) {
-      console.error('Error sending email:', error);
+      logger.error({ err: error }, 'Failed to send email');
       // Don't throw - email failures shouldn't break the application
     }
   }

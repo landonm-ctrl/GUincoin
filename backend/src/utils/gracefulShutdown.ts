@@ -1,14 +1,15 @@
 import { Server } from 'http';
+import logger from '../config/logger';
 
 export function setupGracefulShutdown(server: Server): void {
   const shutdown = (signal: string) => {
-    console.log(`\n${signal} received. Shutting down gracefully...`);
+    logger.info({ signal }, 'Received shutdown signal, shutting down gracefully');
     server.close(() => {
-      console.log('Server closed.');
+      logger.info('Server closed');
       process.exit(0);
     });
     setTimeout(() => {
-      console.error('Forced shutdown after timeout.');
+      logger.error('Forced shutdown after timeout');
       process.exit(1);
     }, 10_000);
   };

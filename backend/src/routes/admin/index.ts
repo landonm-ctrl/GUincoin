@@ -1,4 +1,5 @@
 import express from 'express';
+import { requireAuth, requireAdmin } from '../../middleware/auth';
 import emailTemplatesRoutes from './emailTemplates';
 import wellnessRoutes from './wellness';
 import storeRoutes from './store';
@@ -11,6 +12,10 @@ import gamesRoutes from './games';
 import studioRoutes from './studio';
 
 const router = express.Router();
+
+// All admin routes require authentication and admin role
+router.use(requireAuth);
+router.use(requireAdmin);
 
 // Mount all admin sub-routes
 router.use(emailTemplatesRoutes);

@@ -5,6 +5,58 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// CSRF token management
+let csrfToken: string | null = null;
+let csrfTokenPromise: Promise<string> | null = null;
+
+async function fetchCsrfToken(): Promise<string> {
+  const response = await axios.get<{ token: string }>('/api/csrf-token', {
+    withCredentials: true,
+  });
+  const token = response.data.token;
+  csrfToken = token;
+  return token;
+}
+
+async function getCsrfToken(): Promise<string> {
+  if (csrfToken) {
+    return csrfToken;
+  }
+  // Avoid duplicate concurrent fetches
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = fetchCsrfToken().finally(() => {
+      csrfTokenPromise = null;
+    });
+  }
+  return csrfTokenPromise;
+}
+
+// Inject CSRF token header on mutation requests
+api.interceptors.request.use(async (config) => {
+  const method = (config.method ?? 'get').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const token = await getCsrfToken();
+    config.headers['X-CSRF-Token'] = token;
+  }
+  return config;
+});
+
+// If a request fails with 403 (token may have expired), refresh token and retry once
+api.interceptors.response.use(undefined, async (error) => {
+  const originalRequest = error.config;
+  if (
+    error.response?.status === 403 &&
+    !originalRequest._csrfRetry
+  ) {
+    originalRequest._csrfRetry = true;
+    csrfToken = null;
+    const token = await getCsrfToken();
+    originalRequest.headers['X-CSRF-Token'] = token;
+    return api.request(originalRequest);
+  }
+  return Promise.reject(error);
+});
+
 export interface User {
   id: string;
   email: string;

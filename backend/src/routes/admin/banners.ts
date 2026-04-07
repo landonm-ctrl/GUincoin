@@ -1,10 +1,11 @@
 import express from 'express';
 import { z } from 'zod';
-import { requireAuth, requireAdmin, AuthRequest } from '../../middleware/auth';
+import { AuthRequest } from '../../middleware/auth';
 import { validate } from '../../middleware/validation';
 import bannerService, { BANNER_DIMENSIONS, PageName } from '../../services/bannerService';
 import aiImageService from '../../services/aiImageService';
 import { AppError } from '../../utils/errors';
+import { validateUploadedFile } from '../../utils/fileValidation';
 import { BannerPosition } from '@prisma/client';
 import multer from 'multer';
 import path from 'path';
@@ -127,7 +128,7 @@ const generateAiImageSchema = z.object({
  * GET /banners
  * List all banners
  */
-router.get('/banners', requireAuth, requireAdmin, async (req: AuthRequest, res, next) => {
+router.get('/banners', async (req: AuthRequest, res, next) => {
   try {
     const position = req.query.position as BannerPosition | undefined;
     const campaignId = req.query.campaignId as string | undefined;
@@ -144,7 +145,7 @@ router.get('/banners', requireAuth, requireAdmin, async (req: AuthRequest, res, 
  * GET /banners/dimensions
  * Get banner dimension requirements for all positions
  */
-router.get('/banners/dimensions', requireAuth, requireAdmin, async (_req: AuthRequest, res, next) => {
+router.get('/banners/dimensions', async (_req: AuthRequest, res, next) => {
   try {
     res.json(BANNER_DIMENSIONS);
   } catch (error) {
@@ -156,7 +157,7 @@ router.get('/banners/dimensions', requireAuth, requireAdmin, async (_req: AuthRe
  * GET /banners/:id
  * Get banner by ID
  */
-router.get('/banners/:id', requireAuth, requireAdmin, async (req: AuthRequest, res, next) => {
+router.get('/banners/:id', async (req: AuthRequest, res, next) => {
   try {
     const banner = await bannerService.getBannerById(req.params.id);
     res.json(banner);
@@ -171,8 +172,6 @@ router.get('/banners/:id', requireAuth, requireAdmin, async (req: AuthRequest, r
  */
 router.post(
   '/banners',
-  requireAuth,
-  requireAdmin,
   validate(createBannerSchema),
   async (req: AuthRequest, res, next) => {
     try {
@@ -190,14 +189,14 @@ router.post(
  */
 router.post(
   '/banners/:id/upload',
-  requireAuth,
-  requireAdmin,
   upload.single('image'),
   async (req: AuthRequest, res, next) => {
     try {
       if (!req.file) {
         throw new AppError('No image file provided', 400);
       }
+
+      await validateUploadedFile(req.file.path, 'image');
 
       const banner = await bannerService.getBannerById(req.params.id);
 
@@ -223,8 +222,6 @@ router.post(
  */
 router.put(
   '/banners/:id',
-  requireAuth,
-  requireAdmin,
   validate(updateBannerSchema),
   async (req: AuthRequest, res, next) => {
     try {
@@ -240,7 +237,7 @@ router.put(
  * DELETE /banners/:id
  * Delete a banner
  */
-router.delete('/banners/:id', requireAuth, requireAdmin, async (req: AuthRequest, res, next) => {
+router.delete('/banners/:id', async (req: AuthRequest, res, next) => {
   try {
     await bannerService.deleteBanner(req.params.id);
     res.json({ message: 'Banner deleted successfully' });
@@ -253,7 +250,7 @@ router.delete('/banners/:id', requireAuth, requireAdmin, async (req: AuthRequest
  * POST /banners/:id/toggle
  * Toggle banner active status
  */
-router.post('/banners/:id/toggle', requireAuth, requireAdmin, async (req: AuthRequest, res, next) => {
+router.post('/banners/:id/toggle', async (req: AuthRequest, res, next) => {
   try {
     const banner = await bannerService.toggleBanner(req.params.id);
     res.json(banner);
@@ -268,8 +265,6 @@ router.post('/banners/:id/toggle', requireAuth, requireAdmin, async (req: AuthRe
  */
 router.post(
   '/banners/:id/generate-ai',
-  requireAuth,
-  requireAdmin,
   validate(generateAiImageSchema),
   async (req: AuthRequest, res, next) => {
     try {

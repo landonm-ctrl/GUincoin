@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { requireAdmin, AuthRequest } from '../../middleware/auth';
+import { AuthRequest } from '../../middleware/auth';
 import { validate } from '../../middleware/validation';
 import prisma from '../../config/database';
 import { publicUpload, getPublicFileUrl } from '../../services/fileService';
@@ -36,7 +36,6 @@ const amazonListImportSchema = z.object({
 // Create custom store product
 router.post(
   '/store/products/custom',
-  requireAdmin,
   publicUpload.single('image'),
   async (req: AuthRequest, res, next) => {
     try {
@@ -68,7 +67,7 @@ router.post(
 );
 
 // Seed a sample store product
-router.post('/store/products/seed', requireAdmin, async (_req: AuthRequest, res, next) => {
+router.post('/store/products/seed', async (_req: AuthRequest, res, next) => {
   try {
     const product = await prisma.storeProduct.create({
       data: {
@@ -90,7 +89,6 @@ router.post('/store/products/seed', requireAdmin, async (_req: AuthRequest, res,
 // Import store product from Amazon URL
 router.post(
   '/store/products/amazon',
-  requireAdmin,
   validate(amazonImportSchema),
   async (req: AuthRequest, res, next) => {
     try {
@@ -153,7 +151,6 @@ router.post(
 // Import store products from Amazon list URL
 router.post(
   '/store/products/amazon-list',
-  requireAdmin,
   validate(amazonListImportSchema),
   async (req: AuthRequest, res, next) => {
     try {
@@ -233,7 +230,7 @@ router.post(
 );
 
 // Get all store products (for admin management)
-router.get('/store/products', requireAdmin, async (_req: AuthRequest, res, next) => {
+router.get('/store/products', async (_req: AuthRequest, res, next) => {
   try {
     const products = await prisma.storeProduct.findMany({
       orderBy: { createdAt: 'desc' },
@@ -248,7 +245,6 @@ router.get('/store/products', requireAdmin, async (_req: AuthRequest, res, next)
 // Toggle product active status (soft delete/restore)
 router.patch(
   '/store/products/:id/toggle',
-  requireAdmin,
   async (req: AuthRequest, res, next) => {
     try {
       const { id } = req.params;
@@ -279,7 +275,6 @@ router.patch(
 // Delete a store product permanently
 router.delete(
   '/store/products/:id',
-  requireAdmin,
   async (req: AuthRequest, res, next) => {
     try {
       const { id } = req.params;

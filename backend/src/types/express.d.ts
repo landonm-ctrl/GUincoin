@@ -4,5 +4,6 @@ declare namespace Express {
     email: string;
     name: string;
     isManager: boolean;
+    isAdmin: boolean;
   }
 }

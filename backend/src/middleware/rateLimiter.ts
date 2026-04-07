@@ -1,36 +1,31 @@
-// Simple in-memory rate limiter
-// For production, consider using redis-rate-limiter or express-rate-limit
+import rateLimit from 'express-rate-limit';
 
-interface RateLimitStore {
-  [key: string]: {
-    count: number;
-    resetTime: number;
-  };
-}
-
-const store: RateLimitStore = {};
-
+/**
+ * General API rate limiter
+ */
 export const rateLimiter = (maxRequests: number = 100, windowMs: number = 15 * 60 * 1000) => {
-  return (req: any, res: any, next: any) => {
-    const key = req.ip || req.connection.remoteAddress;
-    const now = Date.now();
-
-    if (!store[key] || now > store[key].resetTime) {
-      store[key] = {
-        count: 1,
-        resetTime: now + windowMs,
-      };
-      return next();
-    }
-
-    if (store[key].count >= maxRequests) {
-      return res.status(429).json({
-        error: 'Too many requests',
-        message: `Rate limit exceeded. Maximum ${maxRequests} requests per ${windowMs / 1000} seconds.`,
-      });
-    }
-
-    store[key].count++;
-    next();
-  };
+  return rateLimit({
+    windowMs,
+    max: maxRequests,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: 'Too many requests',
+      message: `Rate limit exceeded. Maximum ${maxRequests} requests per ${windowMs / 1000} seconds.`,
+    },
+  });
 };
+
+/**
+ * Stricter rate limiter for sensitive endpoints (transfers, auth)
+ */
+export const strictRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many requests',
+    message: 'Rate limit exceeded for sensitive endpoint. Please try again later.',
+  },
+});

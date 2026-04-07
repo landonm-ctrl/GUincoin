@@ -42,6 +42,7 @@ router.get('/me', requireAuth, (req: AuthRequest, res) => {
     email: req.user!.email,
     name: req.user!.name,
     isManager: req.user!.isManager,
+    isAdmin: req.user!.isAdmin,
   });
 });
 
