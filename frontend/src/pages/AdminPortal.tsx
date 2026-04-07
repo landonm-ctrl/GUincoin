@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-// Admin Portal - Redesigned navigation UI
+// Admin Portal - Redesigned navigation UI v2
 import {
   createWellnessTask,
   createCustomProduct,
