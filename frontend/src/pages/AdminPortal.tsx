@@ -766,12 +766,63 @@ export default function AdminPortal() {
     return null;
   }
 
-  const tabs = [
-    { id: 'wellness' as TabType, name: 'Wellness', count: submissions.length },
-    { id: 'store' as TabType, name: 'Store', count: pendingPurchases.length },
-    { id: 'studio' as TabType, name: 'Campaign Studio', count: campaigns.filter(c => c.status === 'active').length || null },
-    { id: 'google-chat' as TabType, name: 'Google Chat', count: chatStats?.recentActivity || null },
-    { id: 'settings' as TabType, name: 'Settings', count: null },
+  const tabConfig = [
+    {
+      id: 'wellness' as TabType,
+      name: 'Wellness',
+      description: 'Tasks & submissions',
+      count: submissions.length,
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
+        </svg>
+      ),
+    },
+    {
+      id: 'store' as TabType,
+      name: 'Store',
+      description: 'Products & orders',
+      count: pendingPurchases.length,
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'studio' as TabType,
+      name: 'Campaigns',
+      description: 'Studio & banners',
+      count: campaigns.filter(c => c.status === 'active').length || null,
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42" />
+        </svg>
+      ),
+    },
+    {
+      id: 'google-chat' as TabType,
+      name: 'Google Chat',
+      description: 'Logs & statistics',
+      count: chatStats?.recentActivity || null,
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+        </svg>
+      ),
+    },
+    {
+      id: 'settings' as TabType,
+      name: 'Settings',
+      description: 'Templates & roles',
+      count: null,
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -805,32 +856,48 @@ export default function AdminPortal() {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+        {/* Section Navigation */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+          {tabConfig.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-150 ${
+                activeTab === tab.id
+                  ? 'border-blue-500 bg-blue-50 shadow-sm'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+              }`}
+            >
+              <div className={`rounded-lg p-2 ${
+                activeTab === tab.id
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'bg-gray-100 text-gray-400'
+              }`}>
+                {tab.icon}
+              </div>
+              <div>
+                <p className={`text-sm font-semibold ${
+                  activeTab === tab.id ? 'text-blue-900' : 'text-gray-900'
+                }`}>
+                  {tab.name}
+                </p>
+                <p className={`text-xs mt-0.5 hidden sm:block ${
+                  activeTab === tab.id ? 'text-blue-600' : 'text-gray-500'
+                }`}>
+                  {tab.description}
+                </p>
+              </div>
+              {tab.count !== null && tab.count > 0 && (
+                <span className={`absolute top-2 right-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full px-1.5 text-xs font-bold ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                }`}
-              >
-                {tab.name}
-                {tab.count !== null && tab.count > 0 && (
-                  <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
-                    activeTab === tab.id
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-700'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Wellness Tab */}
@@ -1121,17 +1188,17 @@ export default function AdminPortal() {
                 </button>
               </div>
 
-              <div className="border-b border-gray-200 mb-4">
-                <nav className="-mb-px flex space-x-8">
+              <div className="mb-4">
+                <nav className="flex flex-wrap gap-2">
                   <button
                     onClick={() => {
                       setPurchasesTab('pending');
                       loadPurchases();
                     }}
-                    className={`whitespace-nowrap border-b-2 py-2 px-1 text-sm font-medium ${
+                    className={`whitespace-nowrap rounded-full py-1.5 px-4 text-sm font-medium transition-colors ${
                       purchasesTab === 'pending'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
                     }`}
                   >
                     Pending ({pendingPurchases.length})
@@ -1141,10 +1208,10 @@ export default function AdminPortal() {
                       setPurchasesTab('all');
                       loadPurchases();
                     }}
-                    className={`whitespace-nowrap border-b-2 py-2 px-1 text-sm font-medium ${
+                    className={`whitespace-nowrap rounded-full py-1.5 px-4 text-sm font-medium transition-colors ${
                       purchasesTab === 'all'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
                     }`}
                   >
                     All Purchases
@@ -1190,7 +1257,7 @@ export default function AdminPortal() {
                         {purchase.status === 'pending' && (
                           <div className="ml-4">
                             {fulfillingId === purchase.id ? (
-                              <div className="w-64 space-y-2">
+                              <div className="w-full sm:w-64 space-y-2">
                                 <input
                                   type="text"
                                   placeholder="Tracking number (optional)"
@@ -1815,34 +1882,34 @@ export default function AdminPortal() {
         {activeTab === 'settings' && (
           <div className="space-y-6">
             {/* Settings Sub-tabs */}
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
+            <div className="mb-2">
+              <nav className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setSettingsTab('email-templates')}
-                  className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+                  className={`whitespace-nowrap rounded-full py-1.5 px-4 text-sm font-medium transition-colors ${
                     settingsTab === 'email-templates'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
                   }`}
                 >
                   Email Templates
                 </button>
                 <button
                   onClick={() => setSettingsTab('roles')}
-                  className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+                  className={`whitespace-nowrap rounded-full py-1.5 px-4 text-sm font-medium transition-colors ${
                     settingsTab === 'roles'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
                   }`}
                 >
                   Role Management
                 </button>
                 <button
                   onClick={() => setSettingsTab('allotments')}
-                  className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+                  className={`whitespace-nowrap rounded-full py-1.5 px-4 text-sm font-medium transition-colors ${
                     settingsTab === 'allotments'
-                      ? 'border-purple-500 text-purple-600'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
                   }`}
                 >
                   Manager Allotments
