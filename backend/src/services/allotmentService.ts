@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, PeriodType } from '@prisma/client';
+import { PrismaClient, PeriodType } from '@prisma/client';
 import prisma from '../config/database';
 import transactionService from './transactionService';
 
@@ -55,7 +55,7 @@ export class AllotmentService {
       balance: Number(allotment.amount) - Number(usedAmount),
       recurringBudget: Number(allotment.amount),
       usedThisPeriod: Number(usedAmount),
-    } as any;
+    };
   }
 
   /**
@@ -97,80 +97,39 @@ export class AllotmentService {
     amount: number,
     description: string
   ) {
-    return await prisma.$transaction(async (tx) => {
-      // Lock the manager's allotment row to prevent concurrent over-awards
-      const now = new Date();
-      const allotment = await tx.managerAllotment.findFirst({
-        where: {
-          managerId,
-          periodStart: { lte: now },
-          periodEnd: { gte: now },
-        },
-      });
+    // Verify manager can award this amount
+    const canAward = await this.canAward(managerId, amount);
+    if (!canAward) {
+      throw new Error('Insufficient allotment remaining');
+    }
 
-      if (!allotment) {
-        throw new Error('Insufficient allotment remaining');
-      }
-
-      // Lock the allotment row with FOR UPDATE
-      await tx.$queryRaw`
-        SELECT id FROM "ManagerAllotment" WHERE id = ${allotment.id} FOR UPDATE
-      `;
-
-      // Calculate used amount within the transaction
-      const usedResult = await tx.ledgerTransaction.aggregate({
-        where: {
-          sourceEmployeeId: managerId,
-          transactionType: 'manager_award',
-          status: 'posted',
-          createdAt: {
-            gte: allotment.periodStart,
-            lte: allotment.periodEnd,
-          },
-        },
-        _sum: {
-          amount: true,
-        },
-      });
-
-      const usedAmount = Number(usedResult._sum.amount || 0);
-      const remaining = Number(allotment.amount) - usedAmount;
-
-      if (remaining < amount) {
-        throw new Error('Insufficient allotment remaining');
-      }
-
-      // Find employee
-      const employee = await tx.employee.findUnique({
-        where: { email: employeeEmail },
-        include: { account: true },
-      });
-
-      if (!employee) {
-        throw new Error('Employee not found');
-      }
-
-      if (!employee.account) {
-        throw new Error('Employee account not found');
-      }
-
-      // Create pending transaction
-      const transaction = await transactionService.createPendingTransaction(
-        employee.account.id,
-        'manager_award',
-        amount,
-        description || `Award from manager`,
-        managerId,
-        undefined,
-        undefined,
-        tx
-      );
-
-      // Post immediately (manager awards are auto-posted)
-      await transactionService.postTransaction(transaction.id, tx);
-
-      return transaction;
+    // Find employee
+    const employee = await prisma.employee.findUnique({
+      where: { email: employeeEmail },
+      include: { account: true },
     });
+
+    if (!employee) {
+      throw new Error('Employee not found');
+    }
+
+    if (!employee.account) {
+      throw new Error('Employee account not found');
+    }
+
+    // Create pending transaction
+    const transaction = await transactionService.createPendingTransaction(
+      employee.account.id,
+      'manager_award',
+      amount,
+      description || `Award from manager`,
+      managerId
+    );
+
+    // Post immediately (manager awards are auto-posted)
+    await transactionService.postTransaction(transaction.id);
+
+    return transaction;
   }
 
   /**
@@ -236,7 +195,7 @@ export class AllotmentService {
       where: { id: allotment.id },
       data: { amount: { increment: amount } },
     });
-    return { ...updated, description: _description || 'Allotment deposit' } as any;
+    return { ...updated, description: _description || 'Allotment deposit' };
   }
 
   /**
@@ -248,7 +207,7 @@ export class AllotmentService {
       orderBy: { periodStart: 'desc' },
       take: _limit || 20,
     });
-    return { transactions: allotments as any[] };
+    return { transactions: allotments };
   }
 
   /**

@@ -1,4 +1,5 @@
 import express from 'express';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../../middleware/auth';
 import prisma from '../../config/database';
 import { z } from 'zod';
@@ -34,7 +35,7 @@ router.get(
       };
 
       // Build where clause
-      const where: any = {
+      const where: Prisma.ChatCommandAuditWhereInput = {
         provider: 'google_chat',
       };
 
