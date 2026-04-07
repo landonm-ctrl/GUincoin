@@ -1,4 +1,4 @@
-import { PrismaClient, TransactionType, TransactionStatus } from '@prisma/client';
+import { PrismaClient, Prisma, TransactionType, TransactionStatus } from '@prisma/client';
 import prisma from '../config/database';
 
 export class TransactionService {
@@ -12,9 +12,11 @@ export class TransactionService {
     description?: string,
     sourceEmployeeId?: string,
     targetEmployeeId?: string,
-    wellnessSubmissionId?: string
+    wellnessSubmissionId?: string,
+    tx?: Prisma.TransactionClient
   ) {
-    return await prisma.ledgerTransaction.create({
+    const client = tx || prisma;
+    return await client.ledgerTransaction.create({
       data: {
         accountId,
         transactionType,
@@ -33,8 +35,8 @@ export class TransactionService {
    * @param transactionId - The ID of the transaction to post
    * @param tx - Optional Prisma transaction client. If provided, uses this client instead of creating a new transaction.
    */
-  async postTransaction(transactionId: string, tx?: any) {
-    const executePost = async (client: any) => {
+  async postTransaction(transactionId: string, tx?: Prisma.TransactionClient) {
+    const executePost = async (client: Prisma.TransactionClient) => {
       const transaction = await client.ledgerTransaction.findUnique({
         where: { id: transactionId },
         include: { account: true },
@@ -115,64 +117,99 @@ export class TransactionService {
   async getAccountBalance(accountId: string, includePending: boolean = false) {
     const account = await prisma.account.findUnique({
       where: { id: accountId },
+      include: {
+        transactions: {
+          where: includePending
+            ? {}
+            : {
+                status: TransactionStatus.posted,
+              },
+        },
+      },
     });
 
     if (!account) {
       throw new Error('Account not found');
     }
 
-    const postedBalance = Number(account.balance);
+    if (includePending) {
+      // Calculate balance including pending
+      const pendingTotal = account.transactions
+        .filter((t) => t.status === TransactionStatus.pending)
+        .reduce((sum, t) => {
+          if (
+            t.transactionType === TransactionType.manager_award ||
+            t.transactionType === TransactionType.peer_transfer_received ||
+            t.transactionType === TransactionType.wellness_reward ||
+            t.transactionType === TransactionType.adjustment
+          ) {
+            return sum + Number(t.amount);
+          } else if (
+            t.transactionType === TransactionType.peer_transfer_sent ||
+            t.transactionType === TransactionType.store_purchase
+          ) {
+            return sum - Number(t.amount);
+          }
+          return sum;
+        }, 0);
 
-    if (!includePending) {
       return {
-        posted: postedBalance,
-        pending: 0,
-        total: postedBalance,
+        posted: Number(account.balance),
+        pending: pendingTotal,
+        total: Number(account.balance) + pendingTotal,
       };
     }
 
-    // Use aggregate queries instead of loading all transactions
-    const [creditPending, debitPending] = await Promise.all([
-      // Sum of pending credits (money coming in)
-      prisma.ledgerTransaction.aggregate({
-        where: {
-          accountId,
-          status: TransactionStatus.pending,
-          transactionType: {
-            in: [
-              TransactionType.manager_award,
-              TransactionType.peer_transfer_received,
-              TransactionType.wellness_reward,
-              TransactionType.adjustment,
-            ],
-          },
-        },
-        _sum: { amount: true },
-      }),
-      // Sum of pending debits (money going out)
-      prisma.ledgerTransaction.aggregate({
-        where: {
-          accountId,
-          status: TransactionStatus.pending,
-          transactionType: {
-            in: [
-              TransactionType.peer_transfer_sent,
-              TransactionType.store_purchase,
-            ],
-          },
-        },
-        _sum: { amount: true },
-      }),
-    ]);
+    return {
+      posted: Number(account.balance),
+      pending: 0,
+      total: Number(account.balance),
+    };
+  }
 
-    const pendingCredits = Number(creditPending._sum.amount || 0);
-    const pendingDebits = Number(debitPending._sum.amount || 0);
-    const pendingTotal = pendingCredits - pendingDebits;
+  /**
+   * Get account balance with a FOR UPDATE row lock (must be called within a transaction)
+   */
+  async getAccountBalanceForUpdate(accountId: string, tx: Prisma.TransactionClient) {
+    const result = await tx.$queryRaw<{ balance: number }[]>`
+      SELECT balance FROM "Account" WHERE id = ${accountId} FOR UPDATE
+    `;
+
+    if (!result || result.length === 0) {
+      throw new Error('Account not found');
+    }
+
+    // Also calculate pending transaction effects within the same tx
+    const pendingTransactions = await tx.ledgerTransaction.findMany({
+      where: {
+        accountId,
+        status: TransactionStatus.pending,
+      },
+    });
+
+    const pendingTotal = pendingTransactions.reduce((sum, t) => {
+      if (
+        t.transactionType === TransactionType.manager_award ||
+        t.transactionType === TransactionType.peer_transfer_received ||
+        t.transactionType === TransactionType.wellness_reward ||
+        t.transactionType === TransactionType.adjustment
+      ) {
+        return sum + Number(t.amount);
+      } else if (
+        t.transactionType === TransactionType.peer_transfer_sent ||
+        t.transactionType === TransactionType.store_purchase
+      ) {
+        return sum - Number(t.amount);
+      }
+      return sum;
+    }, 0);
+
+    const posted = Number(result[0].balance);
 
     return {
-      posted: postedBalance,
+      posted,
       pending: pendingTotal,
-      total: postedBalance + pendingTotal,
+      total: posted + pendingTotal,
     };
   }
 
