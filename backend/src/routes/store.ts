@@ -4,7 +4,7 @@ import prisma from '../config/database';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { normalizeStoreProduct } from '../services/storeService';
 import transactionService from '../services/transactionService';
-import { TransactionType, PurchaseOrderStatus } from '@prisma/client';
+import { Prisma, TransactionType, PurchaseOrderStatus } from '@prisma/client';
 import { validate } from '../middleware/validation';
 
 const router = express.Router();
@@ -50,7 +50,7 @@ const withTimeout = async (url: string, timeoutMs = 8_000) => {
 };
 
 const getStoreProductDelegate = () => {
-  const delegate = (prisma as any).storeProduct;
+  const delegate = prisma.storeProduct;
   if (!delegate) {
     throw new Error('StoreProduct model not available. Run prisma migrate dev and prisma generate.');
   }
@@ -66,15 +66,15 @@ router.get('/products', requireAuth, async (req: AuthRequest, res) => {
       orderBy: { createdAt: 'desc' },
     });
     const normalized = products.map(normalizeStoreProduct);
-    const response = normalized.map((product: any) => ({
+    const response = normalized.map((product: ReturnType<typeof normalizeStoreProduct>) => ({
       ...product,
       imageUrls: product.imageUrls.map((url: string) =>
         isAmazonImageUrl(url) ? toAmazonProxyUrl(req, url) : url
       ),
     }));
     res.json(response);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -89,8 +89,8 @@ router.get('/amazon-image', requireAuth, async (req: AuthRequest, res) => {
     let response: Response;
     try {
       response = await withTimeout(url);
-    } catch (error: any) {
-      if (error?.name === 'AbortError') {
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
         return res.status(504).json({ error: 'Amazon image request timed out' });
       }
       return res.status(502).json({ error: 'Amazon image request failed' });
@@ -105,8 +105,8 @@ router.get('/amazon-image', requireAuth, async (req: AuthRequest, res) => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(buffer);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -237,8 +237,8 @@ router.post('/purchase', requireAuth, validate(purchaseSchema), async (req: Auth
       },
       newBalance,
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -267,8 +267,8 @@ router.get('/purchases', requireAuth, async (req: AuthRequest, res) => {
         priceGuincoin: Number(p.product.priceGuincoin),
       }))
     );
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -307,8 +307,8 @@ router.post('/wishlist/:productId', requireAuth, async (req: AuthRequest, res) =
         product: normalizeStoreProduct(wishlistItem.product),
       },
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -324,11 +324,11 @@ router.delete('/wishlist/:productId', requireAuth, async (req: AuthRequest, res)
     });
 
     res.json({ message: 'Removed from wishlist' });
-  } catch (error: any) {
-    if (error.code === 'P2025') {
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return res.status(404).json({ error: 'Item not in wishlist' });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -348,8 +348,8 @@ router.get('/wishlist', requireAuth, async (req: AuthRequest, res) => {
         product: normalizeStoreProduct(item.product),
       }))
     );
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -424,8 +424,8 @@ router.post('/goals', requireAuth, validate(z.object({
         currentAmount: Number(goal.currentAmount),
       },
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -450,8 +450,8 @@ router.get('/goals', requireAuth, async (req: AuthRequest, res) => {
         currentAmount: Number(goal.currentAmount),
       }))
     );
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -474,8 +474,8 @@ router.delete('/goals/:goalId', requireAuth, async (req: AuthRequest, res) => {
     });
 
     res.json({ message: 'Goal deleted' });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -537,8 +537,8 @@ router.get('/goals/check-achievements', requireAuth, async (req: AuthRequest, re
         currentAmount: Number(g.currentAmount),
       })),
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 

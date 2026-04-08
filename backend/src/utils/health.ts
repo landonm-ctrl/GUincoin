@@ -13,10 +13,17 @@ export interface DependencyHealth {
   durationMs: number;
 }
 
+export interface MemoryInfo {
+  rssBytes: number;
+  heapUsedBytes: number;
+  heapTotalBytes: number;
+}
+
 export interface HealthSummary {
   status: HealthStatus;
   timestamp: string;
   uptimeSeconds: number;
+  memory: MemoryInfo;
   dependencies: DependencyHealth[];
   environment: {
     node: string;
@@ -167,10 +174,17 @@ export const getHealthSummary = async (): Promise<HealthSummary> => {
 
   const dependencies = [database, uploads, email, oauth];
 
+  const mem = process.memoryUsage();
+
   return {
     status: deriveStatus(dependencies),
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
+    memory: {
+      rssBytes: mem.rss,
+      heapUsedBytes: mem.heapUsed,
+      heapTotalBytes: mem.heapTotal,
+    },
     dependencies,
     environment: {
       node: process.version,

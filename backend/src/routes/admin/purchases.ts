@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { requireAuth, AuthRequest } from '../../middleware/auth';
+import { AuthRequest } from '../../middleware/auth';
 import { validate } from '../../middleware/validation';
 import prisma from '../../config/database';
 import emailService from '../../services/emailService';
@@ -12,7 +12,7 @@ import { toNumber } from '../../utils/number';
 const router = express.Router();
 
 // Get all pending purchase orders
-router.get('/purchases/pending', requireAuth, async (_req: AuthRequest, res, next) => {
+router.get('/purchases/pending', async (_req: AuthRequest, res, next) => {
   try {
     const purchases = await prisma.storePurchaseOrder.findMany({
       where: { status: PurchaseOrderStatus.pending },
@@ -42,7 +42,7 @@ router.get('/purchases/pending', requireAuth, async (_req: AuthRequest, res, nex
 });
 
 // Get all purchases (all statuses)
-router.get('/purchases', requireAuth, async (req: AuthRequest, res, next) => {
+router.get('/purchases', async (req: AuthRequest, res, next) => {
   try {
     const status = req.query.status as PurchaseOrderStatus | undefined;
     const where: Record<string, unknown> = {};
@@ -97,7 +97,6 @@ const fulfillPurchaseSchema = z.object({
 
 router.post(
   '/purchases/:id/fulfill',
-  requireAuth,
   validate(fulfillPurchaseSchema),
   async (req: AuthRequest, res, next) => {
     try {

@@ -1,5 +1,6 @@
 import transporter from '../config/email';
 import { renderTemplate } from './emailTemplateService';
+import { escapeHtml } from '../utils/html';
 
 export class EmailService {
   private fromEmail = process.env.SMTP_USER || 'noreply@guincoin.com';
@@ -34,7 +35,7 @@ export class EmailService {
     message?: string
   ) {
     const messageBlock = message
-      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${message}"</p>`
+      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${escapeHtml(message)}"</p>`
       : '';
 
     const rendered = await renderTemplate('manager_award_received', {
@@ -60,7 +61,7 @@ export class EmailService {
     message?: string
   ) {
     const messageBlock = message
-      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${message}"</p>`
+      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${escapeHtml(message)}"</p>`
       : '';
 
     const rendered = await renderTemplate('manager_award_sent', {
@@ -86,7 +87,7 @@ export class EmailService {
     message?: string
   ) {
     const messageBlock = message
-      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${message}"</p>`
+      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${escapeHtml(message)}"</p>`
       : '';
 
     const rendered = await renderTemplate('peer_transfer_received', {
@@ -112,7 +113,7 @@ export class EmailService {
     message?: string
   ) {
     const messageBlock = message
-      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${message}"</p>`
+      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${escapeHtml(message)}"</p>`
       : '';
 
     const rendered = await renderTemplate('peer_transfer_sent', {
@@ -138,7 +139,7 @@ export class EmailService {
     message?: string
   ) {
     const messageBlock = message
-      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${message}"</p>`
+      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">"${escapeHtml(message)}"</p>`
       : '';
 
     const rendered = await renderTemplate('peer_transfer_recipient_not_found', {
@@ -184,7 +185,7 @@ export class EmailService {
     reason?: string
   ) {
     const reasonBlock = reason
-      ? `<p style="background: #fee2e2; padding: 15px; border-radius: 5px; margin: 20px 0;"><strong>Reason:</strong> ${reason}</p>`
+      ? `<p style="background: #fee2e2; padding: 15px; border-radius: 5px; margin: 20px 0;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>`
       : '';
 
     const rendered = await renderTemplate('wellness_rejected', {
@@ -208,7 +209,7 @@ export class EmailService {
     trackingNumber?: string
   ) {
     const trackingBlock = trackingNumber
-      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;"><strong>Tracking Number:</strong> ${trackingNumber}</p>`
+      ? `<p style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;"><strong>Tracking Number:</strong> ${escapeHtml(trackingNumber)}</p>`
       : '';
 
     const rendered = await renderTemplate('purchase_fulfilled', {

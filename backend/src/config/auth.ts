@@ -2,6 +2,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import prisma from './database';
 import pendingTransferService from '../services/pendingTransferService';
+import logger from './logger';
 
 // Conditionally register Google OAuth strategy if credentials are provided
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -21,7 +22,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
           // Verify Google Workspace domain
           const workspaceDomain = process.env.GOOGLE_WORKSPACE_DOMAIN;
-          if (workspaceDomain && !email.endsWith(workspaceDomain)) {
+          if (workspaceDomain && !email.endsWith('@' + workspaceDomain)) {
             return done(new Error(`Email must be from ${workspaceDomain} domain`), undefined);
           }
 
@@ -60,7 +61,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             }
           }
 
-          await pendingTransferService.claimPendingTransfers(email);
+          // Fire-and-forget: don't block login for pending transfer claims
+          pendingTransferService.claimPendingTransfers(email).catch((err) => {
+            logger.error({ err, email }, 'Failed to claim pending transfers');
+          });
 
           return done(null, employee);
         } catch (error) {
@@ -70,8 +74,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     )
   );
 } else {
-  console.warn('⚠️  Google OAuth credentials not found. OAuth login will be disabled.');
-  console.warn('   Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file to enable OAuth.');
+  logger.warn('Google OAuth credentials not found. OAuth login will be disabled.');
+  logger.warn('Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file to enable OAuth.');
 }
 
 passport.serializeUser((user: any, done) => {

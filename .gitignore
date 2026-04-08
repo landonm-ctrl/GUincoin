@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 
 # Build outputs
@@ -36,4 +35,7 @@ uploads/*
 # Database
 *.db
 *.sqlite
+
+# Claude Code
+.claude/
 

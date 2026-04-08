@@ -55,7 +55,7 @@ export class AllotmentService {
       balance: Number(allotment.amount) - Number(usedAmount),
       recurringBudget: Number(allotment.amount),
       usedThisPeriod: Number(usedAmount),
-    } as any;
+    };
   }
 
   /**
@@ -195,7 +195,7 @@ export class AllotmentService {
       where: { id: allotment.id },
       data: { amount: { increment: amount } },
     });
-    return { ...updated, description: _description || 'Allotment deposit' } as any;
+    return { ...updated, description: _description || 'Allotment deposit' };
   }
 
   /**
@@ -207,7 +207,7 @@ export class AllotmentService {
       orderBy: { periodStart: 'desc' },
       take: _limit || 20,
     });
-    return { transactions: allotments as any[] };
+    return { transactions: allotments };
   }
 
   /**

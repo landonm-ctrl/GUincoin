@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import transactionService from './transactionService';
 import emailService from './emailService';
@@ -11,7 +12,8 @@ export class PendingTransferService {
     message?: string;
     recipientNameFallback: string;
     senderName: string;
-  }) {
+  }, tx?: Prisma.TransactionClient) {
+    const client = tx || prisma;
     const normalizedEmail = params.recipientEmail.toLowerCase();
 
     const senderTransaction = await transactionService.createPendingTransaction(
@@ -19,10 +21,13 @@ export class PendingTransferService {
       'peer_transfer_sent',
       params.amount,
       params.message || `Transfer to ${params.recipientNameFallback}`,
-      params.senderEmployeeId
+      params.senderEmployeeId,
+      undefined,
+      undefined,
+      tx
     );
 
-    const pendingTransfer = await prisma.pendingTransfer.create({
+    const pendingTransfer = await client.pendingTransfer.create({
       data: {
         senderEmployeeId: params.senderEmployeeId,
         recipientEmail: normalizedEmail,
@@ -32,6 +37,7 @@ export class PendingTransferService {
       },
     });
 
+    // Send email outside of any transaction context — fire and forget after DB work
     await emailService.sendPeerTransferRecipientNotFoundNotification(
       normalizedEmail,
       params.recipientNameFallback,
@@ -66,37 +72,50 @@ export class PendingTransferService {
 
     for (const transfer of pendingTransfers) {
       try {
-        const sender = await prisma.employee.findUnique({
-          where: { id: transfer.senderEmployeeId },
+        // Each claim wrapped in its own transaction with FOR UPDATE locking
+        const { sender } = await prisma.$transaction(async (tx) => {
+          // Lock the recipient account row to prevent concurrent claims
+          await tx.$queryRaw`
+            SELECT balance FROM "Account" WHERE id = ${recipient.account!.id} FOR UPDATE
+          `;
+
+          const claimSender = await tx.employee.findUnique({
+            where: { id: transfer.senderEmployeeId },
+          });
+
+          const recipientTransaction = await transactionService.createPendingTransaction(
+            recipient.account!.id,
+            'peer_transfer_received',
+            Number(transfer.amount),
+            transfer.message || `Transfer from ${claimSender?.name || 'Guincoin user'}`,
+            transfer.senderEmployeeId,
+            recipient.id,
+            undefined,
+            tx
+          );
+
+          const senderTransaction = await tx.ledgerTransaction.findUnique({
+            where: { id: transfer.senderTransactionId },
+          });
+
+          if (senderTransaction?.status === 'pending') {
+            await transactionService.postTransaction(senderTransaction.id, tx);
+          }
+
+          await transactionService.postTransaction(recipientTransaction.id, tx);
+
+          await tx.pendingTransfer.update({
+            where: { id: transfer.id },
+            data: {
+              status: 'claimed',
+              claimedAt: new Date(),
+            },
+          });
+
+          return { sender: claimSender };
         });
 
-        const recipientTransaction = await transactionService.createPendingTransaction(
-          recipient.account.id,
-          'peer_transfer_received',
-          Number(transfer.amount),
-          transfer.message || `Transfer from ${sender?.name || 'Guincoin user'}`,
-          transfer.senderEmployeeId,
-          recipient.id
-        );
-
-        const senderTransaction = await prisma.ledgerTransaction.findUnique({
-          where: { id: transfer.senderTransactionId },
-        });
-
-        if (senderTransaction?.status === 'pending') {
-          await transactionService.postTransaction(senderTransaction.id);
-        }
-
-        await transactionService.postTransaction(recipientTransaction.id);
-
-        await prisma.pendingTransfer.update({
-          where: { id: transfer.id },
-          data: {
-            status: 'claimed',
-            claimedAt: new Date(),
-          },
-        });
-
+        // Send emails outside the transaction
         await emailService.sendPeerTransferNotification(
           recipient.email,
           recipient.name,

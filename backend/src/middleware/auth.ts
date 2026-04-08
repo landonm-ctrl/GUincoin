@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
     email: string;
     name: string;
     isManager: boolean;
+    isAdmin: boolean;
   };
 }
 
@@ -27,11 +28,11 @@ export const requireManager = (req: AuthRequest, res: Response, next: NextFuncti
 };
 
 export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-  // For now, we'll use a simple check. Can be enhanced with a role system later
   if (!req.user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  // Assuming admin is determined by email or a separate flag
-  // This can be customized based on requirements
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   next();
 };

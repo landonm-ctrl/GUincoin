@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth, AuthRequest } from '../../middleware/auth';
+import { AuthRequest } from '../../middleware/auth';
 import prisma from '../../config/database';
 import { z } from 'zod';
 import { validate } from '../../middleware/validation';
@@ -12,17 +12,8 @@ import { PeriodType } from '@prisma/client';
 const router = express.Router();
 
 // Get all employees with their roles
-router.get('/users', requireAuth, async (req: AuthRequest, res, next) => {
+router.get('/users', async (req: AuthRequest, res, next) => {
   try {
-    // Check if user is admin
-    const currentUser = await prisma.employee.findUnique({
-      where: { id: req.user!.id },
-    });
-
-    if (!currentUser || !currentUser.isAdmin) {
-      throw new AppError('Admin access required', 403);
-    }
-
     const employees = await prisma.employee.findMany({
       select: {
         id: true,
@@ -53,19 +44,9 @@ const createEmployeeSchema = z.object({
 
 router.post(
   '/users',
-  requireAuth,
   validate(createEmployeeSchema),
   async (req: AuthRequest, res, next) => {
     try {
-      // Check if user is admin
-      const currentUser = await prisma.employee.findUnique({
-        where: { id: req.user!.id },
-      });
-
-      if (!currentUser || !currentUser.isAdmin) {
-        throw new AppError('Admin access required', 403);
-      }
-
       const { email, name, isManager, isAdmin } = req.body;
 
       // Check if employee already exists
@@ -137,19 +118,9 @@ const updateRolesSchema = z.object({
 
 router.put(
   '/users/:id/roles',
-  requireAuth,
   validate(updateRolesSchema),
   async (req: AuthRequest, res, next) => {
     try {
-      // Check if user is admin
-      const currentUser = await prisma.employee.findUnique({
-        where: { id: req.user!.id },
-      });
-
-      if (!currentUser || !currentUser.isAdmin) {
-        throw new AppError('Admin access required', 403);
-      }
-
       // Prevent admin from removing their own admin status
       if (req.params.id === req.user!.id && req.body.isAdmin === false) {
         throw new AppError('You cannot remove your own admin status', 400);
@@ -212,17 +183,8 @@ router.put(
 );
 
 // Get balance report (all users with balances and manager allotments)
-router.get('/balances-report', requireAuth, async (req: AuthRequest, res, next) => {
+router.get('/balances-report', async (req: AuthRequest, res, next) => {
   try {
-    // Check if user is admin
-    const currentUser = await prisma.employee.findUnique({
-      where: { id: req.user!.id },
-    });
-
-    if (!currentUser || !currentUser.isAdmin) {
-      throw new AppError('Admin access required', 403);
-    }
-
     // Get all employees with their accounts
     const employees = await prisma.employee.findMany({
       include: {
@@ -302,19 +264,9 @@ const depositAllotmentSchema = z.object({
 
 router.post(
   '/users/:id/allotment/deposit',
-  requireAuth,
   validate(depositAllotmentSchema),
   async (req: AuthRequest, res, next) => {
     try {
-      // Check if user is admin
-      const currentUser = await prisma.employee.findUnique({
-        where: { id: req.user!.id },
-      });
-
-      if (!currentUser || !currentUser.isAdmin) {
-        throw new AppError('Admin access required', 403);
-      }
-
       const { amount, description } = req.body;
 
       // Deposit into manager's allotment
@@ -361,18 +313,8 @@ router.post(
 // Get manager's allotment details (for admin view)
 router.get(
   '/users/:id/allotment',
-  requireAuth,
   async (req: AuthRequest, res, next) => {
     try {
-      // Check if user is admin
-      const currentUser = await prisma.employee.findUnique({
-        where: { id: req.user!.id },
-      });
-
-      if (!currentUser || !currentUser.isAdmin) {
-        throw new AppError('Admin access required', 403);
-      }
-
       // Check if target user is a manager
       const employee = await prisma.employee.findUnique({
         where: { id: req.params.id },
@@ -438,19 +380,9 @@ const setRecurringBudgetSchema = z.object({
 
 router.put(
   '/users/:id/allotment/recurring',
-  requireAuth,
   validate(setRecurringBudgetSchema),
   async (req: AuthRequest, res, next) => {
     try {
-      // Check if user is admin
-      const currentUser = await prisma.employee.findUnique({
-        where: { id: req.user!.id },
-      });
-
-      if (!currentUser || !currentUser.isAdmin) {
-        throw new AppError('Admin access required', 403);
-      }
-
       const { amount, periodType } = req.body;
 
       await allotmentService.setRecurringBudget(

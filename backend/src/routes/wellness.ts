@@ -23,8 +23,8 @@ router.get('/tasks', requireAuth, async (req: AuthRequest, res) => {
     }));
 
     res.json(normalizedTasks);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -43,8 +43,8 @@ router.get('/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
       ...task,
       coinValue: Number(task.coinValue),
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 
@@ -158,8 +158,8 @@ router.post(
         submission,
         transaction,
       });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
     }
   }
 );
@@ -191,8 +191,8 @@ router.get('/submissions', requireAuth, async (req: AuthRequest, res) => {
     }));
 
     res.json(normalizedSubmissions);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' });
   }
 });
 

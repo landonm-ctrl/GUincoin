@@ -1,4 +1,4 @@
-import { PrismaClient, TransactionType, TransactionStatus } from '@prisma/client';
+import { PrismaClient, Prisma, TransactionType, TransactionStatus } from '@prisma/client';
 import prisma from '../config/database';
 
 export class TransactionService {
@@ -12,9 +12,11 @@ export class TransactionService {
     description?: string,
     sourceEmployeeId?: string,
     targetEmployeeId?: string,
-    wellnessSubmissionId?: string
+    wellnessSubmissionId?: string,
+    tx?: Prisma.TransactionClient
   ) {
-    return await prisma.ledgerTransaction.create({
+    const client = tx || prisma;
+    return await client.ledgerTransaction.create({
       data: {
         accountId,
         transactionType,
@@ -33,8 +35,8 @@ export class TransactionService {
    * @param transactionId - The ID of the transaction to post
    * @param tx - Optional Prisma transaction client. If provided, uses this client instead of creating a new transaction.
    */
-  async postTransaction(transactionId: string, tx?: any) {
-    const executePost = async (client: any) => {
+  async postTransaction(transactionId: string, tx?: Prisma.TransactionClient) {
+    const executePost = async (client: Prisma.TransactionClient) => {
       const transaction = await client.ledgerTransaction.findUnique({
         where: { id: transactionId },
         include: { account: true },
@@ -162,6 +164,52 @@ export class TransactionService {
       posted: Number(account.balance),
       pending: 0,
       total: Number(account.balance),
+    };
+  }
+
+  /**
+   * Get account balance with a FOR UPDATE row lock (must be called within a transaction)
+   */
+  async getAccountBalanceForUpdate(accountId: string, tx: Prisma.TransactionClient) {
+    const result = await tx.$queryRaw<{ balance: number }[]>`
+      SELECT balance FROM "Account" WHERE id = ${accountId} FOR UPDATE
+    `;
+
+    if (!result || result.length === 0) {
+      throw new Error('Account not found');
+    }
+
+    // Also calculate pending transaction effects within the same tx
+    const pendingTransactions = await tx.ledgerTransaction.findMany({
+      where: {
+        accountId,
+        status: TransactionStatus.pending,
+      },
+    });
+
+    const pendingTotal = pendingTransactions.reduce((sum, t) => {
+      if (
+        t.transactionType === TransactionType.manager_award ||
+        t.transactionType === TransactionType.peer_transfer_received ||
+        t.transactionType === TransactionType.wellness_reward ||
+        t.transactionType === TransactionType.adjustment
+      ) {
+        return sum + Number(t.amount);
+      } else if (
+        t.transactionType === TransactionType.peer_transfer_sent ||
+        t.transactionType === TransactionType.store_purchase
+      ) {
+        return sum - Number(t.amount);
+      }
+      return sum;
+    }, 0);
+
+    const posted = Number(result[0].balance);
+
+    return {
+      posted,
+      pending: pendingTotal,
+      total: posted + pendingTotal,
     };
   }
 

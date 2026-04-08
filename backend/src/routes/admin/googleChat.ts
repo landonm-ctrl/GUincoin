@@ -1,9 +1,9 @@
 import express from 'express';
-import { requireAuth, AuthRequest } from '../../middleware/auth';
+import { Prisma } from '@prisma/client';
+import { AuthRequest } from '../../middleware/auth';
 import prisma from '../../config/database';
 import { z } from 'zod';
 import { validate } from '../../middleware/validation';
-import { AppError } from '../../utils/errors';
 
 const router = express.Router();
 
@@ -22,19 +22,9 @@ const getAuditLogsSchema = z.object({
 // Get Google Chat audit logs
 router.get(
   '/google-chat/audit-logs',
-  requireAuth,
   validate(getAuditLogsSchema),
   async (req: AuthRequest, res, next) => {
     try {
-      // Check if user is admin
-      const currentUser = await prisma.employee.findUnique({
-        where: { id: req.user!.id },
-      });
-
-      if (!currentUser || !currentUser.isAdmin) {
-        throw new AppError('Admin access required', 403);
-      }
-
       const { page = 1, limit = 50, status, userEmail, startDate, endDate } = req.query as {
         page?: number;
         limit?: number;
@@ -45,7 +35,7 @@ router.get(
       };
 
       // Build where clause
-      const where: any = {
+      const where: Prisma.ChatCommandAuditWhereInput = {
         provider: 'google_chat',
       };
 
@@ -107,17 +97,8 @@ router.get(
 );
 
 // Get audit log statistics
-router.get('/google-chat/stats', requireAuth, async (req: AuthRequest, res, next) => {
+router.get('/google-chat/stats', async (req: AuthRequest, res, next) => {
   try {
-    // Check if user is admin
-    const currentUser = await prisma.employee.findUnique({
-      where: { id: req.user!.id },
-    });
-
-    if (!currentUser || !currentUser.isAdmin) {
-      throw new AppError('Admin access required', 403);
-    }
-
     // Get stats for last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
